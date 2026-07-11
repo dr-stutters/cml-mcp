@@ -112,6 +112,9 @@ Once connected, just describe what you want in natural language. Examples:
 
 > "Register the server with this Smart Licensing token: ..."
 
+> "Build an FMC-managed FTD lab with two FTDs, register them, pair them into
+> HA, then fail over to the standby and show me it took over."
+
 A typical agent workflow maps to tools like this:
 
 ```
@@ -329,6 +332,29 @@ tests/
 .claude/agents/     # specialist agents (architect, catalyst, firewall)
 CLAUDE.md           # agent orchestration protocol
 ```
+
+## Troubleshooting & tips
+
+Hard-won lessons, encoded in the specialist agents and worth knowing:
+
+- **Connectivity down between nodes? Check the CML fabric first.** An interface
+  added to an already-running node comes up `STOPPED` even though the link shows
+  `STARTED`, so no traffic passes and the device sees it down/down. Verify both
+  link and interface state (`list_links`, `list_interfaces`) and
+  `set_interface_state` start them before diagnosing anything inside a device.
+- **"Booted" is not "ready" for Firepower.** FTDv reaches BOOTED in ~5 min but
+  its FDM/registration services take 10-20 min more; FMCv takes ~15-30 min and
+  its REST API answers before it is fully ready. Poll patiently.
+- **A fresh FMC won't register devices until it's licensed.** Day-0 alone leaves
+  it `UNREGISTERED` with no eval; enable Evaluation Mode first
+  (`POST /api/fmc_platform/v1/license/smartlicenses {"registrationType":"EVALUATION"}`)
+  or registration fails fast and the device record is discarded.
+- **FTD HA needs two separate failover links** (LAN + stateful on different
+  interfaces), both peers clean/deployed first, and — trust the device's
+  `show failover` over the FMC's health poll, which lags.
+- **FMC allows the admin user only one session.** The screenshot tools handle
+  the "End Existing Session" dialog; for concurrent human + automation access,
+  use a second admin account.
 
 ## Security notes
 

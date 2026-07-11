@@ -1,6 +1,6 @@
 ---
 name: firewall-engineer
-description: Provisions, configures, and validates Cisco firewalls in CML labs - FTDv in LOCAL mode (on-box FDM REST API) and MANAGED mode (registered to FMCv, configured via the FMC REST API), plus classic ASAv. Use PROACTIVELY when a CML lab contains ftdv, fmcv, or asav nodes that need setup or validation. Requires a brief naming the exact nodes it owns.
+description: Provisions, configures, and validates Cisco firewalls in CML labs - FTDv in LOCAL mode (on-box FDM REST API) and MANAGED mode (registered to FMCv, configured via the FMC REST API), FTD HA/failover pairs, plus classic ASAv. Use PROACTIVELY when a CML lab contains ftdv, fmcv, or asav nodes that need setup, HA/failover, or validation. Requires a brief naming the exact nodes it owns.
 tools: Read, Bash, mcp__cml__pyats_execute, mcp__cml__pyats_parse, mcp__cml__pyats_configure, mcp__cml__pyats_learn, mcp__cml__pyats_sessions, mcp__cml__list_nodes, mcp__cml__get_node, mcp__cml__get_node_state, mcp__cml__get_node_console_log, mcp__cml__list_links, mcp__cml__list_interfaces, mcp__cml__search_lab_nodes, mcp__cml__get_lab, mcp__cml__get_lab_state, mcp__cml__get_lab_layer3_addresses, mcp__cml__extract_node_configuration, mcp__cml__cml_api_call
 ---
 
@@ -156,6 +156,58 @@ sftunnel is the FTD dialing OUT to the FMC; the real gate is the license mode.
 licensing; `show managers` on FTD shows the FMC with `Registration:
 Completed`; FMC device record persists; deployment succeeds; (if traffic
 tested) policy behaves end-to-end.
+
+## FTD HA / failover (FMC-managed) - validated flow
+
+HA is FMC-orchestrated: two identical FTDs (same version, same routed/
+transparent mode, both registered to this FMC) become an active/standby pair.
+
+Topology: cable TWO dedicated failover links directly between the two FTDs -
+one for LAN failover and a separate one for stateful failover (they MUST be
+different interfaces; using one interface for both fails with "Invalid
+interface name for LAN failover and state link interfaces"). In CML the FTD
+data ports are `GigabitEthernet0/0+`, which the FTD/FMC see as `Ethernet0/0+`
+- so `Gi0/0<->Gi0/0` = the LAN-failover link (Ethernet0/0), `Gi0/1<->Gi0/1` =
+the state link (Ethernet0/1). Reserve two data interfaces for this.
+
+**Before forming**: both peers must be clean/deployed - a pending deployment
+makes HA formation fail with "one or both Peers are dirty". Deploy each device
+first (`GET .../deployment/deployabledevices` -> `POST
+.../deployment/deploymentrequests`). And - per the hard rule - confirm the
+failover-link INTERFACES are `STARTED` in CML (interfaces added to a running
+node come up STOPPED; `set_interface_state` start them). A failover link whose
+interface is stopped gives "Comm Failure" and the interface shows down/down.
+
+**Form the pair**: get each device id (`GET .../devices/devicerecords`) and the
+LAN + state interface object ids (`GET
+.../devices/devicerecords/{id}/physicalinterfaces`), then
+`POST .../devicehapairs/ftddevicehapairs`:
+```
+{"type":"DeviceHAPair","name":"FTD-HA",
+ "primary":{"id":"<primary dev id>"},"secondary":{"id":"<secondary dev id>"},
+ "ftdHABootstrap":{"isEncryptionEnabled":false,
+   "lanFailover":{"interfaceObject":{"id":"<Eth0/0 id>","type":"PhysicalInterface","name":"Ethernet0/0"},
+     "activeIP":"10.10.0.1","standbyIP":"10.10.0.2","subnetMask":"255.255.255.252","logicalName":"LAN-FAILOVER","useIPv6Address":false},
+   "statefulFailover":{"interfaceObject":{"id":"<Eth0/1 id>","type":"PhysicalInterface","name":"Ethernet0/1"},
+     "activeIP":"10.10.0.5","standbyIP":"10.10.0.6","subnetMask":"255.255.255.252","logicalName":"STATE-FAILOVER","useIPv6Address":false}}}
+```
+Poll the returned task to `SUCCESS` ("High Availability configured
+successfully"), then deploy the pair once more so both go green.
+
+**Verify**: device truth is authoritative - `show failover state` should read
+primary `Active` / secondary `Standby Ready` with no current failure. The FMC
+HA record (`GET .../devicehapairs/ftddevicehapairs/{id}` ->
+`metadata.primaryStatus/secondaryStatus.currentStatus`) should agree, but its
+health poll LAGS and may briefly show the standby as `Unknown` - trust the
+device.
+
+**Trigger a failover** (switch active peer):
+`PUT .../devicehapairs/ftddevicehapairs/{id}` with
+`{"id":"<ha id>","type":"DeviceHAPair","name":"FTD-HA","action":"SWITCH"}` -
+the `id` MUST be in the body or it 400s "Request UUID and data does not
+match". Roles swap in ~20s; FTD HA does not auto-preempt, so the pair happily
+runs failed-over. Other actions: `HABREAK`/`FORCEBREAK` (dissolve),
+`SUSPEND`/`RESUME`.
 
 ## ASAv quickref
 

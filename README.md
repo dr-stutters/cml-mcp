@@ -126,6 +126,26 @@ Things worth knowing:
   server, and `cml_api_call` can invoke any of them — including binary
   downloads to a local file.
 
+## Specialist agents (Claude Code)
+
+The repo ships two Claude Code agent definitions in
+[.claude/agents/](.claude/agents/) — other MCP clients can ignore this
+directory:
+
+- **cml-lab-architect** — designs and builds topologies (node-definition
+  selection with boot-time/RAM trade-offs, layout, day-0 configs) and returns
+  a delegation brief per device group.
+- **catalyst-engineer** — configures and verifies IOS/IOS-XE/Catalyst devices
+  (iosv, iosvl2, IOL, csr1000v, cat8000v, cat9000v) over their consoles:
+  routing protocols, VLANs/trunking/STP/EtherChannel, with a per-platform
+  cheat-sheet and a verification playbook.
+
+The flow: the main session asks the architect to design and build, then fans
+the returned briefs out to catalyst-engineer invocations (in parallel when
+device groups are disjoint — two agents must never share a node's console).
+See [CLAUDE.md](CLAUDE.md) for the full protocol. More specialists (firewall,
+SP/DC, wireless) follow the same pattern.
+
 ## Tool reference
 
 ### Labs

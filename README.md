@@ -34,6 +34,12 @@ against **CML 2.10** (build 13).
 - Python 3.11+ and [uv](https://docs.astral.sh/uv/)
 - A reachable CML 2.x server and credentials (an admin account unlocks the
   system-administration tools; a regular account works for lab operations)
+- The first `uv sync` pulls in pyATS/Genie (a few hundred MB) for the console
+  tools — this is expected.
+- The pyATS console tools connect through the CML host's console server, so the
+  machine running the server needs SSH reachability to the CML host (TCP 22).
+- The screenshot tools are optional and pulled in only with the `browser`
+  extra (see Installation).
 
 ## Installation
 
@@ -135,7 +141,7 @@ Things worth knowing:
 
 ## Specialist agents (Claude Code)
 
-The repo ships two Claude Code agent definitions in
+The repo ships three Claude Code agent definitions in
 [.claude/agents/](.claude/agents/) — other MCP clients can ignore this
 directory:
 
@@ -148,15 +154,17 @@ directory:
   cheat-sheet and a verification playbook.
 - **firewall-engineer** — provisions and validates Cisco firewalls: FTDv in
   **local mode** (on-box FDM REST API) and **FMC-managed mode** (registration
-  + FMC REST API workflow), plus classic ASAv. Knows the day-0 JSON
-  provisioning flow and drives the FDM/FMC APIs from an in-lab toolbox node
-  when the management network isn't externally reachable.
+  + FMC REST API, incl. the eval-license prerequisite and HA/failover pairing),
+  plus classic ASAv. Knows the day-0 JSON provisioning flow and drives the
+  FDM/FMC APIs directly or via an in-lab toolbox node when the management
+  network isn't externally reachable.
 
 The flow: the main session asks the architect to design and build, then fans
-the returned briefs out to catalyst-engineer invocations (in parallel when
-device groups are disjoint — two agents must never share a node's console).
-See [CLAUDE.md](CLAUDE.md) for the full protocol. More specialists (firewall,
-SP/DC, wireless) follow the same pattern.
+the returned briefs out to the matching specialist (catalyst-engineer,
+firewall-engineer) — in parallel when device groups are disjoint, since two
+agents must never share a node's console. See [CLAUDE.md](CLAUDE.md) for the
+full protocol. Further specialists (SP/DC, wireless/identity) follow the same
+pattern.
 
 ## Tool reference
 
@@ -312,11 +320,14 @@ src/cml_mcp/
   client.py         # async httpx client: JWT auth, 401 retry, helpers
   server.py         # FastMCP entry point (stdio / streamable-http)
   pyats_manager.py  # persistent pyATS/unicon console sessions per lab
+  screenshots.py    # headless-browser capture (optional 'browser' extra)
   tools/            # tool modules, one per functional area
 tests/
   smoke_test.py         # end-to-end API tool checks
   pyats_e2e_test.py     # console interaction against a booted node
   firepower_e2e_test.py # FTD local + FMC-managed mode validation (heavy)
+.claude/agents/     # specialist agents (architect, catalyst, firewall)
+CLAUDE.md           # agent orchestration protocol
 ```
 
 ## Security notes

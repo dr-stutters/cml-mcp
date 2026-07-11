@@ -29,6 +29,10 @@ confirm a node reached BOOTED if asked to boot the lab.
 | `csr1000v` | IOS-XE 16/17 router | 4 GB | 4-6 min | IOS-XE feature depth |
 | `cat8000v` | IOS-XE 17 router | 4+ GB | 4-6 min | Modern edge platform features |
 | `cat9000v-q200`/`-uadp` | IOS-XE switch | ~18 GB | slow, BETA | Only if user explicitly wants Cat9k; warn about RAM first |
+| `asav` | ASA firewall | 2 GB | 2-4 min | Classic firewall labs; day-0 config supported |
+| `ftdv` | FTD firewall | 8 GB | 10-15 min | Firepower; REQUIRES day-0 JSON (see below) |
+| `fmcv` | Firepower Mgmt Center | 32 GB | 15-30 min | Only when FMC-managed mode is required; check capacity first |
+| `net-tools` | Linux toolbox | tiny | seconds | In-lab curl/iperf/tcpdump driver (creds cisco/cisco) |
 | `external_connector` | bridge/NAT | - | instant | Lab needs outside connectivity |
 | `unmanaged_switch` | hub-like L2 | - | instant | Cheap multi-access segment, no config needed |
 
@@ -57,10 +61,25 @@ building anything large.
 
    Keep interface addressing OUT of day-0 config; put it in the brief for the
    specialist instead (single source of truth for the addressing plan).
-3. `create_link` using node ids (free interfaces are picked automatically) -
+
+   **Firepower is the exception** - ftdv/fmcv are provisioned by a day-0 JSON
+   document (EULA, AdminPassword, mgmt IP, and for FTD the management mode),
+   which YOU must supply at add_node time; get the exact field set from
+   `get_node_definition("ftdv")` / `("fmcv")` provisioning template. Set
+   `"ManageLocally": "Yes"` for FDM/local mode, or `"No"` plus
+   `"FmcIp"`/`"FmcRegKey"` for FMC-managed mode, per the user's requirement.
+   Record the AdminPassword and any FmcRegKey in the specialist brief.
+3. **Firewall lab pattern**: give firewalls a dedicated management segment -
+   an `unmanaged_switch` connecting each FTD's **`Management0/0`** (never
+   `donotuse1`; data ports are `GigabitEthernet0/0+`), the FMC's `eth0`, and
+   a `net-tools` toolbox node the specialist uses to drive the FDM/FMC REST
+   APIs from inside the lab. Link firewall mgmt ports by EXPLICIT interface
+   id, not node id (auto-pick would grab Management0/0 for the first link but
+   guessing is not a plan).
+4. `create_link` using node ids (free interfaces are picked automatically) -
    record which link connects which node pair.
-4. Optional `manage_annotations` to label zones/areas.
-5. Start the lab only if the user asked for it (`control_lab(start)`), then
+5. Optional `manage_annotations` to label zones/areas.
+6. Start the lab only if the user asked for it (`control_lab(start)`), then
    poll `get_lab_state` until converged and report expected boot times.
 
 ## Output contract - delegation briefs

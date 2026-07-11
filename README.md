@@ -139,6 +139,11 @@ directory:
   (iosv, iosvl2, IOL, csr1000v, cat8000v, cat9000v) over their consoles:
   routing protocols, VLANs/trunking/STP/EtherChannel, with a per-platform
   cheat-sheet and a verification playbook.
+- **firewall-engineer** — provisions and validates Cisco firewalls: FTDv in
+  **local mode** (on-box FDM REST API) and **FMC-managed mode** (registration
+  + FMC REST API workflow), plus classic ASAv. Knows the day-0 JSON
+  provisioning flow and drives the FDM/FMC APIs from an in-lab toolbox node
+  when the management network isn't externally reachable.
 
 The flow: the main session asks the architect to design and build, then fans
 the returned briefs out to catalyst-engineer invocations (in parallel when
@@ -266,7 +271,7 @@ SP/DC, wireless) follow the same pattern.
 
 ## Testing
 
-Two test suites run against a live CML server (both create scratch labs and
+Three test suites run against a live CML server (all create scratch labs and
 clean up after themselves):
 
 ```bash
@@ -275,6 +280,10 @@ uv run python tests/smoke_test.py
 
 # Boots a real IOSv node and drives its console via pyATS (~5 min)
 uv run python tests/pyats_e2e_test.py
+
+# Validates FTDv in BOTH management modes: local (FDM API) and FMC-managed
+# (registration + FMC API). Heavy: ~48 GB free RAM on the host, 45-75 min
+uv run python tests/firepower_e2e_test.py
 ```
 
 ## Project layout
@@ -287,8 +296,9 @@ src/cml_mcp/
   pyats_manager.py  # persistent pyATS/unicon console sessions per lab
   tools/            # tool modules, one per functional area
 tests/
-  smoke_test.py     # end-to-end API tool checks
-  pyats_e2e_test.py # console interaction against a booted node
+  smoke_test.py         # end-to-end API tool checks
+  pyats_e2e_test.py     # console interaction against a booted node
+  firepower_e2e_test.py # FTD local + FMC-managed mode validation (heavy)
 ```
 
 ## Security notes

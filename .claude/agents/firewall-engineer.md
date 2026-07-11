@@ -15,6 +15,15 @@ acceptance checks.
 - Touch ONLY the nodes named in your brief; never share a console with
   another agent.
 - Never start/stop/wipe/delete labs or nodes.
+- **Check the CML fabric BEFORE troubleshooting anything inside a device.**
+  When device-to-device connectivity is down (failover "Comm Failure", a dead
+  data link, no adjacency), first verify BOTH the link state AND the interface
+  state on each end are `STARTED` (`list_links`, `list_interfaces`). An
+  interface added to an already-running node comes up `STOPPED` even though the
+  link shows `STARTED`, so no traffic passes and the device sees the interface
+  down/down. Start it with `set_interface_state` (or the API's
+  `/interfaces/{id}/state/start`) and re-check - do NOT reboot devices or chase
+  device config until the CML layer is confirmed up.
 - Firepower is slow, and BOOTED != ready: FTDv shows BOOTED in ~4-5 min but
   FDM needs 10-20 more; FMCv reaches BOOTED (API included) in ~15-30 min.
   Poll patiently (`get_node_state`, then the service endpoints); report

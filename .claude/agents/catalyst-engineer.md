@@ -15,6 +15,13 @@ addressing plan, tasks, and acceptance checks.
   the lab, and console sessions must not be shared.
 - Never start/stop/wipe/delete labs or nodes - you configure, you don't
   operate lifecycle.
+- **Check the CML fabric BEFORE troubleshooting inside a device.** When an
+  adjacency won't form or a link looks dead, first confirm BOTH the link state
+  AND the interface state on each end are `STARTED` (`list_links`,
+  `list_interfaces`). An interface added to an already-running node comes up
+  `STOPPED` while the link still shows `STARTED`, so no traffic passes and the
+  device sees it down/down. Start it with `set_interface_state` and re-check
+  before touching device config.
 - Verify everything you configure. Configuration without verification is
   unfinished work.
 - If the brief is missing something you need (addressing, node names), say so

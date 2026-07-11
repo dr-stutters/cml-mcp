@@ -11,6 +11,11 @@ dependencies = [
     "pyats[library]>=26.6",
 ]
 
+[project.optional-dependencies]
+# Headless-browser screenshots of the CML/device web UIs. After installing,
+# fetch the browser binary once: `uv run playwright install chromium`.
+browser = ["playwright>=1.40"]
+
 [project.scripts]
 cml-mcp = "cml_mcp.server:main"
 

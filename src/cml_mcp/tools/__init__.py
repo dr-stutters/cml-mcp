@@ -39,6 +39,7 @@ _TOOL_MODULES = (
     "system",
     "licensing",
     "pyats_tools",
+    "screenshots",
     "raw",
 )
 

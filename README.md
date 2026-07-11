@@ -11,7 +11,7 @@ against **CML 2.10** (build 13).
 
 ## What it can do
 
-- **Full API coverage** — 71 tools spanning labs, nodes, links, interfaces,
+- **Full API coverage** — 73 tools spanning labs, nodes, links, interfaces,
   annotations, node/image definitions, users, groups, licensing, and system
   administration. Every one of the ~203 REST API operations is reachable:
   anything without a dedicated tool is available through the `cml_api_call`
@@ -21,6 +21,9 @@ against **CML 2.10** (build 13).
   structured JSON via Genie parsers, apply configuration, and learn
   whole-feature state (OSPF, BGP, interfaces, ...). Console sessions persist
   between calls, so repeated commands are fast.
+- **See the UIs (headless browser)** — capture screenshots of the CML web UI
+  or any device management GUI (FMC/FDM) via bundled headless Chromium, returned
+  inline as images. Optional extra; see Installation.
 - **Agent-friendly ergonomics** — `create_link` accepts node ids and picks
   free interfaces automatically; annotations get sensible style defaults;
   large responses are truncated safely; node definition listings are compact
@@ -39,6 +42,10 @@ git clone https://github.com/dr-stutters/cml-mcp.git
 cd cml-mcp
 uv sync
 cp .env.example .env   # then edit .env with your CML details
+
+# Optional: headless-browser screenshot tools (screenshot_cml_ui, screenshot_web_ui)
+uv sync --extra browser
+uv run playwright install chromium
 ```
 
 `.env` settings:
@@ -261,6 +268,17 @@ SP/DC, wireless) follow the same pattern.
 | `get_licensing_status` | Registration, authorization, features, transport, reservation mode |
 | `manage_licensing` | Register/deregister/renew, transport, feature counts, product license, tech support |
 | `manage_license_reservation` | Full offline SLR flow for air-gapped servers |
+
+### Screenshots (headless browser — optional `browser` extra)
+
+| Tool | Description |
+|---|---|
+| `screenshot_cml_ui` | Screenshot the CML web UI dashboard (logs in with the configured credentials) |
+| `screenshot_web_ui` | Screenshot any URL — a device GUI (FMC/FDM) or lab canvas — with optional login; returned inline as an image |
+
+Requires `uv sync --extra browser` then `uv run playwright install chromium`.
+The tools return a clear message if the browser isn't installed, so the rest
+of the server works without it.
 
 ### Escape hatch
 

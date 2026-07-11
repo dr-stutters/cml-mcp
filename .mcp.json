@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cml": {
+      "command": "uv",
+      "args": ["run", "cml-mcp"]
+    }
+  }
+}

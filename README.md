@@ -102,7 +102,7 @@ gives you the **directory, DNS and PKI** behind it. It's a separate,
 independently usable MCP server that drives a **Windows Server** over WinRM /
 PowerShell remoting ([pypsrp](https://github.com/jborean93/pypsrp)).
 
-- **36 tools** across **Active Directory (AD DS)** (promote a DC, users/groups/
+- **37 tools** across **Active Directory (AD DS)** (promote a DC, users/groups/
   OUs/computers), **DNS** (zones/records), **DHCP** (scopes/reservations/leases),
   and **AD Certificate Services** (install a CA, export its cert, sign CSRs), plus
   `win_run_powershell` / `win_run_powershell_json` / `win_run_command` escape hatches.

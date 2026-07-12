@@ -135,7 +135,11 @@ ping is 0% loss** across the VTI overlay. **Dual-ISP ECMP done**: a 2nd
 AUTO_VPN topology over ISP2 (`enableMultiPath`) gives two active tunnels + two
 iBGP sessions and installs the remote LAN via both next-hops; an ISP1
 link-down failover test kept the host-to-host ping at 0% loss (rode ISP2).
-Remaining: the other spokes (PRI/NCT/MCT LAN protocols → redistribution),
+**All 4 spokes done** — each on the dual-ISP overlay with a different branch
+LAN protocol redistributed in and reachable end-to-end (0% loss): **WMA
+connected, PRI OSPF, NCT EIGRP, MCT eBGP**. The redistribution merges a
+companion `router bgp` into the auto-VPN's and tags routes with the overlay
+community so they pass its outbound filter (see firewall-engineer). Remaining:
 NNJ 2nd hub, DIA, hub HA. See memory `firewall-sdwan-cvd-lab`.
 
 **Hard-won findings:**

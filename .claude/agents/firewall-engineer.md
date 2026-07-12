@@ -333,6 +333,34 @@ see carrier-loss from an unmanaged switch, so an ISP-link-down failover is
 driven by IPsec DPD (~40-60s), not interface-down; traffic still survives on the
 surviving ISP.
 
+**Adding a spoke to a live AUTO_VPN:** add the spoke endpoint to BOTH per-ISP
+topologies (interface = that ISP's physical WAN), then **deploy the spoke AND
+redeploy the hub** — the hub DVTI crypto changes per spoke, so tunnels stay down
+until the hub is redeployed.
+
+**Redistributing a branch LAN IGP into the overlay (validated OSPF/EIGRP/eBGP):**
+the auto-VPN only auto-distributes *connected* (`distributeConnectedNetwork`);
+its BGP is not an editable object. To advertise LAN routes learned via an IGP,
+add a **companion config that MERGES** into the auto-VPN's `router bgp <AS>`:
+POST `/routing/bgpgeneralsettings` {asNumber} then POST `/routing/bgp` carrying
+just your addition — deploy renders ONE `router bgp` with the auto-VPN neighbors
++ your addition. Two hard rules:
+- **Community gate:** the auto-VPN neighbor OUT route-map is
+  `permit if community <tag> … deny everything else`. Any route you inject must
+  carry that community or it's silently filtered. Attach a route-map
+  (`entries:[{action:PERMIT, communityListSetting:<tag>}]`) to your
+  redistribution, or (for eBGP) have the LAN router set the community outbound.
+- Per protocol: **OSPF/EIGRP** = configure the IGP (`/routing/ospfv2routes` or
+  `/routing/eigrproutes`) on the inside, then `redistributeProtocols`
+  [`RedistributeOSPF`/`RedistributeEIGRP`] in the companion BGP with the
+  set-community route-map. **eBGP** = LAN router in its own AS, added as a
+  companion `/routing/bgp` neighbor (needs `neighborHops.maxHopCount:1` + the
+  full neighborTimers/Routes/Transport sub-objects or you get a vague 400); let
+  the LAN router tag community itself. LAN return path: OSPF
+  `default-information originate`, or a static default in the LAN router (EIGRP),
+  or automatic for eBGP (overlay routes are advertised to the eBGP peer). PUT
+  gotcha: strip the deprecated `maximumPaths` field or 500 "use ebgp/ibgp".
+
 ## ASAv quickref
 
 Day-0 config supported at add_node; console has no login by default; unicon

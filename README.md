@@ -9,16 +9,17 @@ manage the CML system itself, and everything in between.
 Built directly against the CML REST API (`/api/v0`); developed and tested
 against **CML 2.10** (build 13).
 
-> 🆕 **Companion servers — [Firepower MCP](https://github.com/dr-stutters/firepower-mcp)
-> and [ISE MCP](https://github.com/dr-stutters/ise-mcp).**
+> 🆕 **Companion servers — [Firepower MCP](https://github.com/dr-stutters/firepower-mcp),
+> [ISE MCP](https://github.com/dr-stutters/ise-mcp) and
+> [Windows MCP](https://github.com/dr-stutters/windows-mcp).**
 > Standalone sibling MCP servers for the Cisco Secure Firewall Management Center
-> (FMC) REST API and for Cisco Identity Services Engine (ISE). They're registered
-> here as the `fmc` and `ise` servers in [.mcp.json](.mcp.json) and used by the
-> firewall-engineer and ise-engineer agents, so FMC work (devices, deploy,
-> VTIs/VPN, SD-WAN, routing, HA) runs through `mcp__fmc__*` tools and ISE work
-> (NADs, endpoints, TrustSec/SGT, policy, identity, sessions) through
-> `mcp__ise__*` tools — no raw HTTP. See
-> [Firepower](#companion-server-firepower-fmc-mcp) and [ISE](#companion-server-cisco-ise-mcp) below.
+> (FMC), Cisco Identity Services Engine (ISE), and Windows Server (AD/DNS/DHCP/AD
+> CS over WinRM). They're registered here as the `fmc`, `ise` and `windows`
+> servers in [.mcp.json](.mcp.json) and used by the firewall-engineer,
+> ise-engineer and windows-engineer agents — FMC/ISE/Windows work runs through
+> `mcp__fmc__*` / `mcp__ise__*` / `mcp__windows__*` tools, no raw HTTP/WinRM. See
+> [Firepower](#companion-server-firepower-fmc-mcp), [ISE](#companion-server-cisco-ise-mcp)
+> and [Windows](#companion-server-windows-server-mcp) below.
 
 ## What it can do
 
@@ -93,6 +94,30 @@ an external VM rather than a CML node.
 Clone it alongside this repo (`../ISE_MCP`) to enable the `ise` server, or use it
 entirely on its own — see its
 [README](https://github.com/dr-stutters/ise-mcp).
+
+## Companion server: Windows Server MCP
+
+CML gives you the fabric; ISE gives you identity; **[Windows MCP](https://github.com/dr-stutters/windows-mcp)**
+gives you the **directory, DNS and PKI** behind it. It's a separate,
+independently usable MCP server that drives a **Windows Server** over WinRM /
+PowerShell remoting ([pypsrp](https://github.com/jborean93/pypsrp)).
+
+- **36 tools** across **Active Directory (AD DS)** (promote a DC, users/groups/
+  OUs/computers), **DNS** (zones/records), **DHCP** (scopes/reservations/leases),
+  and **AD Certificate Services** (install a CA, export its cert, sign CSRs), plus
+  `win_run_powershell` / `win_run_powershell_json` / `win_run_command` escape hatches.
+- **Backs the ISE MCP** — AD as an external identity source; `win_get_ca_certificate`
+  → `ise_import_trusted_cert` and `ise_generate_csr` → `win_sign_csr` for EAP-TLS;
+  DNS A-records make ISE's CSR names resolvable.
+- **Wired in here** — registered as the `windows` server in [.mcp.json](.mcp.json)
+  (it runs the sibling repo at `../Windows_MCP`), and the **windows-engineer**
+  agent uses its `mcp__windows__*` tools. Set the `WINRM_*` credentials as env
+  vars or in `../Windows_MCP/.env`. **Enable WinRM on the server first**
+  (`Enable-PSRemoting -Force`).
+
+Clone it alongside this repo (`../Windows_MCP`) to enable the `windows` server, or
+use it entirely on its own — see its
+[README](https://github.com/dr-stutters/windows-mcp).
 
 ## Requirements
 
@@ -209,7 +234,7 @@ Things worth knowing:
 
 ## Specialist agents (Claude Code)
 
-The repo ships four Claude Code agent definitions in
+The repo ships five Claude Code agent definitions in
 [.claude/agents/](.claude/agents/) — other MCP clients can ignore this
 directory:
 
@@ -233,12 +258,18 @@ directory:
   monitors live RADIUS sessions via the companion ISE MCP's `mcp__ise__*` tools;
   also configures and tests the NAD side (802.1X/MAB/RADIUS) on CML switches via
   pyATS, proving auth from both ends.
+- **windows-engineer** — Windows Server / **Active Directory** specialist
+  (external VM over WinRM): AD DS (domain, users, groups, OUs), DNS, DHCP, and
+  **AD CS** (a certificate authority) via the companion Windows MCP's
+  `mcp__windows__*` tools. The identity/PKI/DNS backing for ISE — external
+  identity, EAP-TLS via the CA cert, and resolvable names for ISE CSRs.
 
 The flow: the main session asks the architect to design and build, then fans
 the returned briefs out to the matching specialist (catalyst-engineer,
-firewall-engineer, ise-engineer) — in parallel when device groups are disjoint,
-since two agents must never share a node's console. See [CLAUDE.md](CLAUDE.md)
-for the full protocol. Further specialists (SP/DC, wireless) follow the same
+firewall-engineer, ise-engineer, windows-engineer) — in parallel when device
+groups are disjoint, since two agents must never share a node's console. See
+[CLAUDE.md](CLAUDE.md) for the full protocol. Further specialists (SP/DC,
+wireless) follow the same
 pattern.
 
 ### Cisco Validated Designs library

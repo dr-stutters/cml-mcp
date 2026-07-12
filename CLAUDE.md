@@ -22,6 +22,16 @@ the ISE GUI (Admin > System > Settings > API Settings); it's served on 443 (the
 legacy 9060 port is deprecated/often off). `ise_check_surfaces` reports what's
 reachable.
 
+**Companion Windows MCP:** the `windows` server (registered in `.mcp.json`, source
+in the sibling repo `../Windows_MCP`) drives a Windows Server over WinRM/PowerShell
+remoting (pypsrp) - the windows-engineer agent uses its `mcp__windows__*` tools for
+Active Directory (AD DS), DNS, DHCP, and AD CS (a CA). It's the identity/PKI/DNS
+backing for ISE: build a domain + users (external identity for ISE), a CA whose
+cert feeds `ise_import_trusted_cert` (EAP-TLS), and resolvable DNS names for ISE
+CSRs. WinRM must be enabled on the server first (`Enable-PSRemoting -Force`); set
+`WINRM_*` creds as env vars or in `../Windows_MCP/.env`. Promote-to-DC and role
+installs reboot the box (WinRM drops - reconnect and re-check).
+
 ## Orchestrating lab work with the specialist agents
 
 This repo ships Claude Code agents in `.claude/agents/`:
@@ -37,6 +47,10 @@ This repo ships Claude Code agents in `.claude/agents/`:
   VM): onboards NADs, manages endpoints, TrustSec/SGTs, policy sets, identity
   groups, and live session monitoring via the `mcp__ise__*` tools; also
   configures/tests the NAD side (802.1X/MAB/RADIUS) on CML switches.
+- **windows-engineer** - Windows Server / Active Directory specialist (external
+  VM over WinRM): AD DS (domain, users, groups, OUs), DNS, DHCP, and AD CS (a CA)
+  via the `mcp__windows__*` tools - the identity/PKI/DNS backing for ISE (external
+  identity, EAP-TLS via the CA cert, resolvable CSR names).
 
 Protocol for lab requests involving these device families:
 
@@ -45,8 +59,8 @@ Protocol for lab requests involving these device families:
    architect must decide the FTD management mode up front (day-0
    `ManageLocally` / `FmcIp`) - ask the user if it isn't stated.
 2. Fan each brief out to the matching specialist (**catalyst-engineer**,
-   **firewall-engineer**, **ise-engineer**), passing the brief verbatim.
-   Parallel invocations
+   **firewall-engineer**, **ise-engineer**, **windows-engineer**), passing the
+   brief verbatim. Parallel invocations
    are fine ONLY if their node sets are disjoint - two agents must never
    drive the same node's console (each agent runs its own MCP server process;
    the per-device locks don't protect across agents).

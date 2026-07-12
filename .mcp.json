@@ -11,6 +11,10 @@
     "ise": {
       "command": "uv",
       "args": ["run", "--directory", "../ISE_MCP", "ise-mcp"]
+    },
+    "windows": {
+      "command": "uv",
+      "args": ["run", "--directory", "../Windows_MCP", "windows-mcp"]
     }
   }
 }

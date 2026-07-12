@@ -143,7 +143,20 @@ community so they pass its outbound filter (see firewall-engineer). **Dual-hub
 redundancy done**: NNJ added as a secondary hub on both topologies — each spoke
 builds tunnels to both hubs (the auto-VPN makes the hubs route reflectors), and
 isolating the NYC primary hub kept spoke-to-spoke traffic at 0% loss via NNJ.
-Remaining: hub HA, DIA. See memory `firewall-sdwan-cvd-lab`.
+**Both hubs are FTD HA pairs** (NYC-FW-2/3, NNJ-FW-2/3) — each **failover-
+validated** (kill the active unit → the standby takes over the hub role, DVTIs,
+and inside gateway with the overlay intact). Retrofitting HA onto the live hubs
+required rebuilding each hub with a spare failover NIC (CML can't hot-add one to
+a booted node); see firewall-engineer for the rebuild flow. **The full CVD is
+now built and validated end-to-end in CML.** See memory `firewall-sdwan-cvd-lab`.
+
+## Roadmap / not yet done
+
+- **Direct Internet Access (DIA) + application-aware PBR** — branch internet
+  breakout via a PBR policy on the inside interface (source-IP / app-aware /
+  path-monitoring steering). Not yet built in the lab; relies on Trusted DNS,
+  VDB, and FMC-generated Network Service Groups (see the "Config workflow"
+  section above for the FMC mechanics).
 
 **Hard-won findings:**
 - FMC VPN/VTI config is not REST-discoverable by guessing — pull exact schemas

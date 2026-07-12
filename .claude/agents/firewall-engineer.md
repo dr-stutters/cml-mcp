@@ -209,6 +209,25 @@ match". Roles swap in ~20s; FTD HA does not auto-preempt, so the pair happily
 runs failed-over. Other actions: `HABREAK`/`FORCEBREAK` (dissolve),
 `SUSPEND`/`RESUME`.
 
+**Retrofitting HA onto a LIVE SD-WAN hub (validated, both NYC+NNJ hubs):** the
+failover interface must exist on both units *before* HA formation, and **CML
+locks a node's interface set once it has booted** - you cannot hot-add a
+failover NIC to a running, registered hub (only `wipe` frees it, which destroys
+the FMC registration + config). So if the hub wasn't built with a spare NIC,
+retrofitting HA means **rebuilding it**: stand up a fresh NIC-equipped FTD,
+register it, re-apply the whole hub config (interfaces, DVTIs, overlay
+endpoints, RR/BGP), delete the old hub, then add a second NIC-equipped unit and
+form the pair. The overlay stays up throughout if the *other* hub is present
+(dual-hub redundancy) or spokes ride the surviving path. **Lesson: reserve a
+spare data interface for failover at hub build-time.** A **single** failover
+link also works (`useSameLinkForFailovers:true`, put `lanFailover` +
+`statefulFailover` on the same Ethernet0/3) when you only have one spare NIC.
+Also, an 8-port CML unmanaged switch **cannot grow** - chain a second switch off
+a freed port for extra HA-unit connections. **If the secondary stays
+`currentStatus: Unknown` (not just briefly) after formation, it's usually a
+pending config push, not a health lag - `GET deployment/deployabledevices` and
+deploy the pair; the secondary then syncs to Standby.**
+
 ## Secure Firewall SD-WAN (FMC-managed)
 
 FTD's OWN SD-WAN (not Catalyst SD-WAN): the firewall is the SD-WAN edge, all

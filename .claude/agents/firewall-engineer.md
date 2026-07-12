@@ -361,6 +361,15 @@ just your addition — deploy renders ONE `router bgp` with the auto-VPN neighbo
   or automatic for eBGP (overlay routes are advertised to the eBGP peer). PUT
   gotcha: strip the deprecated `maximumPaths` field or 500 "use ebgp/ibgp".
 
+**Second hub (dual-hub redundancy, validated):** add the 2nd hub as another HUB
+endpoint (`isPrimaryHub:false`) to the SAME per-ISP AUTO_VPN topologies, each
+with its own DVTI + hub loopback + spoke `IPv4AddressPool`. Each hub's pool must
+be on a **unique /24** (FMC rejects two hub pools on one subnet). Redeploy all
+spokes + both hubs → each spoke builds a tunnel per hub per ISP (4 with dual-ISP)
+and the auto-VPN makes the hubs **route reflectors**, so a remote LAN is learned
+via both hubs (Cluster-list/Originator visible in `show bgp`). Isolating one hub
+fails traffic over to the other (DPD-paced in CML).
+
 ## ASAv quickref
 
 Day-0 config supported at add_node; console has no login by default; unicon

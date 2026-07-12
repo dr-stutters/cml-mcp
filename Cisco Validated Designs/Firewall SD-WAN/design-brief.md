@@ -139,8 +139,11 @@ link-down failover test kept the host-to-host ping at 0% loss (rode ISP2).
 LAN protocol redistributed in and reachable end-to-end (0% loss): **WMA
 connected, PRI OSPF, NCT EIGRP, MCT eBGP**. The redistribution merges a
 companion `router bgp` into the auto-VPN's and tags routes with the overlay
-community so they pass its outbound filter (see firewall-engineer). Remaining:
-NNJ 2nd hub, DIA, hub HA. See memory `firewall-sdwan-cvd-lab`.
+community so they pass its outbound filter (see firewall-engineer). **Dual-hub
+redundancy done**: NNJ added as a secondary hub on both topologies — each spoke
+builds tunnels to both hubs (the auto-VPN makes the hubs route reflectors), and
+isolating the NYC primary hub kept spoke-to-spoke traffic at 0% loss via NNJ.
+Remaining: hub HA, DIA. See memory `firewall-sdwan-cvd-lab`.
 
 **Hard-won findings:**
 - FMC VPN/VTI config is not REST-discoverable by guessing — pull exact schemas

@@ -12,14 +12,15 @@ deploy, interfaces/VTIs, VPN/SD-WAN, routing, HA) instead of raw httpx. Set its
 
 **Companion ISE MCP:** the `ise` server (registered in `.mcp.json`, source in the
 sibling repo `../ISE_MCP`) wraps Cisco Identity Services Engine's three REST
-surfaces - OpenAPI (443, `/api/…`), ERS (9060, `/ers/config/…`), and MnT (443,
+surfaces - OpenAPI (443, `/api/…`), ERS (443, `/ers/config/…`), and MnT (443,
 `/admin/API/mnt/…`), all HTTP Basic auth. The ise-engineer agent uses its
 `mcp__ise__*` tools (spec search, network devices/NADs, endpoints, TrustSec/SGT,
 policy sets, identity/endpoint groups, live session monitoring) instead of raw
 httpx. ISE is usually an external VM, not a CML node. Set its `ISE_*` creds as
-env vars or in `../ISE_MCP/.env`. Note: ERS (9060) is firewalled off in some
-deployments (e.g. dCloud) - `ise_check_surfaces` reports what's reachable, and the
-OpenAPI surface covers most config there.
+env vars or in `../ISE_MCP/.env`. Note: ERS is disabled by default - enable it in
+the ISE GUI (Admin > System > Settings > API Settings); it's served on 443 (the
+legacy 9060 port is deprecated/often off). `ise_check_surfaces` reports what's
+reachable.
 
 ## Orchestrating lab work with the specialist agents
 

@@ -74,7 +74,7 @@ an external VM rather than a CML node.
 
 - **47 tools** across three REST surfaces (all HTTP Basic auth): **OpenAPI**
   (443, `/api/…`) for endpoints, TrustSec (SGT/SGACL/egress) and policy sets;
-  **ERS** (9060, `/ers/config/…`) for network devices (NADs), internal users and
+  **ERS** (443, `/ers/config/…`) for network devices (NADs), internal users and
   identity/endpoint groups; and **MnT** (443, `/admin/API/mnt/…`) for read-only
   live session monitoring.
 - **Spec-driven discovery** — `ise_search_spec` + `ise_get_definition` search the
@@ -84,8 +84,9 @@ an external VM rather than a CML node.
 - **Wired in here** — registered as the `ise` server in [.mcp.json](.mcp.json)
   (it runs the sibling repo at `../ISE_MCP`), and the **ise-engineer** agent uses
   its `mcp__ise__*` tools directly. Set the `ISE_*` credentials as env vars or in
-  `../ISE_MCP/.env` (see [.env.example](.env.example)). ERS (9060) is firewalled
-  off in some deployments — `ise_check_surfaces` reports what's reachable.
+  `../ISE_MCP/.env` (see [.env.example](.env.example)). ERS is disabled by
+  default — enable it in the ISE GUI (API Settings); `ise_check_surfaces` reports
+  which surfaces answer.
 
 Clone it alongside this repo (`../ISE_MCP`) to enable the `ise` server, or use it
 entirely on its own — see its

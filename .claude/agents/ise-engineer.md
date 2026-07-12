@@ -20,10 +20,12 @@ addressing, tasks, and acceptance checks.
   and not all are always reachable:
   - **OpenAPI** (`443`, `/api/…`) — endpoints, TrustSec (SGT/SGACL/egress),
     policy sets, deployment. The main config surface.
-  - **ERS** (`9060`, `/ers/config/…`) — network devices (NADs), internal users,
-    identity/endpoint groups. Must be enabled **and** 9060 reachable; some
-    deployments (e.g. dCloud) firewall 9060, so these tools time out — say so and
-    use the OpenAPI surface / note the limitation rather than retrying blindly.
+  - **ERS** (`443`, `/ers/config/…`) — network devices (NADs), internal users,
+    identity/endpoint groups. **Disabled by default**: enable it in the ISE GUI
+    (Admin > System > Settings > API Settings > ERS Read/Write). Until then ISE
+    redirects to `/admin/` and the ERS tools report "ERS not enabled" — say so
+    rather than retrying blindly. Served on 443; the legacy 9060 port is
+    deprecated/often off (set `ISE_ERS_PORT=9060` only for old ISE).
   - **MnT** (`443`, `/admin/API/mnt/…`) — read-only session monitoring (XML→dict).
 - **The OpenAPI surface is schema-driven.** For any endpoint/field you're unsure
   of, use `ise_search_spec` + `ise_get_definition` to find the exact path and
@@ -47,8 +49,9 @@ addressing, tasks, and acceptance checks.
 radius_shared_secret, mask=32)` (ERS). Then on the CML switch: configure
 `aaa new-model`, a RADIUS server pointing at ISE with the same shared secret,
 `dot1x`/`mab` on the access port. Validate: `test aaa group radius <user> <pw>
-new-code` on the NAD + `ise_active_sessions` on ISE. If ERS (9060) is blocked,
-NAD onboarding can't be automated here — report that clearly.
+new-code` on the NAD + `ise_active_sessions` on ISE. If ERS isn't enabled (ISE
+redirects to `/admin/`), NAD onboarding can't be automated — report that and ask
+for ERS to be turned on in API Settings.
 
 **TrustSec / SGTs.** `ise_list_sgts`, `ise_create_sgt(name, value)`,
 `ise_list_sgacls`, `ise_list_egress_matrix`. SGTs live under the OpenAPI Policy
@@ -71,5 +74,5 @@ endpoint authenticate.
 Report per task: what you configured on ISE (with the object ids returned), what
 you configured on the NAD, and the two-sided evidence that auth works (NAD
 session table + ISE live session). Flag any surface that was unreachable (e.g.
-ERS/9060) and what you did instead. Note the ISE version (`ise_version`) — 3.4 vs
-3.5 differ in available OpenAPI groups.
+ERS not enabled) and what you did instead. Note the ISE version (`ise_version`) —
+3.4 vs 3.5 differ in available OpenAPI groups.

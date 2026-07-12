@@ -9,12 +9,16 @@ manage the CML system itself, and everything in between.
 Built directly against the CML REST API (`/api/v0`); developed and tested
 against **CML 2.10** (build 13).
 
-> 🆕 **New companion server — [Firepower MCP](https://github.com/dr-stutters/firepower-mcp).**
-> A standalone sibling MCP server for the Cisco Secure Firewall Management Center
-> (FMC) REST API. It's registered here as the `fmc` server in
-> [.mcp.json](.mcp.json) and used by the firewall-engineer agent, so all FMC
-> work — devices, deploy, VTIs/VPN, SD-WAN, routing, HA — runs through
-> `mcp__fmc__*` tools instead of raw HTTP. See [the section below](#companion-server-firepower-fmc-mcp).
+> 🆕 **Companion servers — [Firepower MCP](https://github.com/dr-stutters/firepower-mcp)
+> and [ISE MCP](https://github.com/dr-stutters/ise-mcp).**
+> Standalone sibling MCP servers for the Cisco Secure Firewall Management Center
+> (FMC) REST API and for Cisco Identity Services Engine (ISE). They're registered
+> here as the `fmc` and `ise` servers in [.mcp.json](.mcp.json) and used by the
+> firewall-engineer and ise-engineer agents, so FMC work (devices, deploy,
+> VTIs/VPN, SD-WAN, routing, HA) runs through `mcp__fmc__*` tools and ISE work
+> (NADs, endpoints, TrustSec/SGT, policy, identity, sessions) through
+> `mcp__ise__*` tools — no raw HTTP. See
+> [Firepower](#companion-server-firepower-fmc-mcp) and [ISE](#companion-server-cisco-ise-mcp) below.
 
 ## What it can do
 
@@ -59,6 +63,33 @@ can build a topology in CML *and* fully configure the FTDs on it.
 Clone it alongside this repo (`../Firepower_MCP`) to enable the `fmc` server, or
 use it entirely on its own — see its
 [README](https://github.com/dr-stutters/firepower-mcp).
+
+## Companion server: Cisco ISE MCP
+
+CML gives you the fabric; Firepower gives you the firewalls;
+**[ISE MCP](https://github.com/dr-stutters/ise-mcp)** gives you identity and NAC.
+It's a separate, independently usable MCP server for **Cisco Identity Services
+Engine (ISE)**, built to the same pattern (FastMCP, async httpx). ISE is usually
+an external VM rather than a CML node.
+
+- **47 tools** across three REST surfaces (all HTTP Basic auth): **OpenAPI**
+  (443, `/api/…`) for endpoints, TrustSec (SGT/SGACL/egress) and policy sets;
+  **ERS** (9060, `/ers/config/…`) for network devices (NADs), internal users and
+  identity/endpoint groups; and **MnT** (443, `/admin/API/mnt/…`) for read-only
+  live session monitoring.
+- **Spec-driven discovery** — `ise_search_spec` + `ise_get_definition` search the
+  ISE OpenAPI docs (23 groups on 3.4, 30 on 3.5) for any endpoint and its exact
+  schema, and `ise_openapi_call` / `ise_ers_call` / `ise_mnt_call` are the generic
+  escape hatches. Verified against ISE 3.4 and 3.5.
+- **Wired in here** — registered as the `ise` server in [.mcp.json](.mcp.json)
+  (it runs the sibling repo at `../ISE_MCP`), and the **ise-engineer** agent uses
+  its `mcp__ise__*` tools directly. Set the `ISE_*` credentials as env vars or in
+  `../ISE_MCP/.env` (see [.env.example](.env.example)). ERS (9060) is firewalled
+  off in some deployments — `ise_check_surfaces` reports what's reachable.
+
+Clone it alongside this repo (`../ISE_MCP`) to enable the `ise` server, or use it
+entirely on its own — see its
+[README](https://github.com/dr-stutters/ise-mcp).
 
 ## Requirements
 
@@ -175,7 +206,7 @@ Things worth knowing:
 
 ## Specialist agents (Claude Code)
 
-The repo ships three Claude Code agent definitions in
+The repo ships four Claude Code agent definitions in
 [.claude/agents/](.claude/agents/) — other MCP clients can ignore this
 directory:
 
@@ -193,12 +224,18 @@ directory:
   auto-VPN wizard driven via the REST API), plus classic ASAv. Knows the day-0
   JSON provisioning flow and drives the FDM/FMC APIs directly or via an in-lab
   toolbox node when the management network isn't externally reachable.
+- **ise-engineer** — identity/NAC specialist for **Cisco ISE** (usually an
+  external VM): onboards network devices (NADs/RADIUS clients), manages
+  endpoints, TrustSec/SGTs, policy sets and identity/endpoint groups, and
+  monitors live RADIUS sessions via the companion ISE MCP's `mcp__ise__*` tools;
+  also configures and tests the NAD side (802.1X/MAB/RADIUS) on CML switches via
+  pyATS, proving auth from both ends.
 
 The flow: the main session asks the architect to design and build, then fans
 the returned briefs out to the matching specialist (catalyst-engineer,
-firewall-engineer) — in parallel when device groups are disjoint, since two
-agents must never share a node's console. See [CLAUDE.md](CLAUDE.md) for the
-full protocol. Further specialists (SP/DC, wireless/identity) follow the same
+firewall-engineer, ise-engineer) — in parallel when device groups are disjoint,
+since two agents must never share a node's console. See [CLAUDE.md](CLAUDE.md)
+for the full protocol. Further specialists (SP/DC, wireless) follow the same
 pattern.
 
 ### Cisco Validated Designs library

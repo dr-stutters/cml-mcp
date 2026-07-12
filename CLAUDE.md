@@ -10,6 +10,17 @@ firewall-engineer agent uses its `mcp__fmc__*` tools (spec search, devices,
 deploy, interfaces/VTIs, VPN/SD-WAN, routing, HA) instead of raw httpx. Set its
 `FMC_*` creds as env vars or in `../Firepower_MCP/.env`.
 
+**Companion ISE MCP:** the `ise` server (registered in `.mcp.json`, source in the
+sibling repo `../ISE_MCP`) wraps Cisco Identity Services Engine's three REST
+surfaces - OpenAPI (443, `/api/…`), ERS (9060, `/ers/config/…`), and MnT (443,
+`/admin/API/mnt/…`), all HTTP Basic auth. The ise-engineer agent uses its
+`mcp__ise__*` tools (spec search, network devices/NADs, endpoints, TrustSec/SGT,
+policy sets, identity/endpoint groups, live session monitoring) instead of raw
+httpx. ISE is usually an external VM, not a CML node. Set its `ISE_*` creds as
+env vars or in `../ISE_MCP/.env`. Note: ERS (9060) is firewalled off in some
+deployments (e.g. dCloud) - `ise_check_surfaces` reports what's reachable, and the
+OpenAPI surface covers most config there.
+
 ## Orchestrating lab work with the specialist agents
 
 This repo ships Claude Code agents in `.claude/agents/`:
@@ -21,6 +32,10 @@ This repo ships Claude Code agents in `.claude/agents/`:
 - **firewall-engineer** - provisions and validates FTDv (local/FDM mode and
   FMC-managed mode), FMCv, and ASAv; drives the FDM/FMC REST APIs via a
   toolbox node or Bash.
+- **ise-engineer** - identity/NAC specialist for Cisco ISE (usually an external
+  VM): onboards NADs, manages endpoints, TrustSec/SGTs, policy sets, identity
+  groups, and live session monitoring via the `mcp__ise__*` tools; also
+  configures/tests the NAD side (802.1X/MAB/RADIUS) on CML switches.
 
 Protocol for lab requests involving these device families:
 
@@ -29,7 +44,8 @@ Protocol for lab requests involving these device families:
    architect must decide the FTD management mode up front (day-0
    `ManageLocally` / `FmcIp`) - ask the user if it isn't stated.
 2. Fan each brief out to the matching specialist (**catalyst-engineer**,
-   **firewall-engineer**), passing the brief verbatim. Parallel invocations
+   **firewall-engineer**, **ise-engineer**), passing the brief verbatim.
+   Parallel invocations
    are fine ONLY if their node sets are disjoint - two agents must never
    drive the same node's console (each agent runs its own MCP server process;
    the per-device locks don't protect across agents).

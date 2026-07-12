@@ -7,6 +7,10 @@
     "fmc": {
       "command": "uv",
       "args": ["run", "--directory", "../Firepower_MCP", "fmc-mcp"]
+    },
+    "ise": {
+      "command": "uv",
+      "args": ["run", "--directory", "../ISE_MCP", "ise-mcp"]
     }
   }
 }

@@ -126,13 +126,27 @@ REST API"): register FTDs by key (+ eval-license prereq) → physical interfaces
 topology → **iBGP AS 65070 over the tunnel** (required — a DVTI can't be
 static-routed) → ACP for the tunnel zone → deploy → verify.
 
-**Status (in progress):** 6-site topology (2 hubs + 4 spokes, dual ISP) built
-and all FTDv registered; NYC↔WMA VTI overlay tunnel proven **up/up** with an
-IPsec SA. Remaining: iBGP + LAN reachability, the 2nd ISP topology (backup VTI
-+ ECMP), the other spokes' LAN protocols (static/eBGP/OSPF/EIGRP →
-redistribution), and DIA. See memory `firewall-sdwan-cvd-lab`.
+**Status — SD-WAN overlay VALIDATED end-to-end (2026-07-12):** 6-site topology
+(2 hubs + 4 spokes, dual ISP) built and all FTDv registered. Hub NYC ↔ spoke
+WMA proven working over the **SD-WAN auto-VPN**: FMC auto-built the spoke SVTI
+(Tunnel1, pool IP 10.255.255.100), auto-configured **iBGP AS 65070**
+(neighbor up, LANs exchanged with community 1000), and **NYC-HOST → WMA-HOST
+ping is 0% loss** across the VTI overlay. Remaining: 2nd ISP topology (backup
+VTI + ECMP), the other spokes (PRI/NCT/MCT LAN protocols → redistribution),
+NNJ 2nd hub, DIA, hub HA. See memory `firewall-sdwan-cvd-lab`.
 
-**Hard-won finding:** the FMC VPN/VTI config is not REST-discoverable by
-guessing — pull the exact schemas from the API Explorer OpenAPI spec at
-`https://<fmc>/api/api-explorer/fmc.json`. Key VTI field: borrow-IP =
-`ipAddressAssignmentType:"BORROW_IP_FROM_INTERFACE"` + `borrowIPfrom:{loopback}`.
+**Hard-won findings:**
+- FMC VPN/VTI config is not REST-discoverable by guessing — pull exact schemas
+  from the API Explorer spec `https://<fmc>/api/api-explorer/fmc.json`. VTI
+  borrow-IP = `ipAddressAssignmentType:"BORROW_IP_FROM_INTERFACE"` +
+  `borrowIPfrom:{loopback}`.
+- **The SD-WAN wizard IS fully API-drivable** as an `AUTO_VPN` topology (see
+  firewall-engineer "SD-WAN auto-VPN — the wizard, via API"). Two non-obvious
+  keys: `topologyType` MUST be `"AUTO_VPN"` (with `HUB_AND_SPOKE` the FMC
+  silently drops `autoVpnSettings`), and the **spoke endpoint's `interface` is
+  the physical WAN interface itself** — FMC auto-creates the spoke SVTI and
+  assigns its IP from the hub's `IPv4AddressPool` via IKEv2 mode-config.
+- **Export-controlled Smart License features are required** for SD-WAN/auto-VPN.
+  In Evaluation Mode it's gated (GUI greys out "SD-WAN Topology"; the API drops
+  `autoVpnSettings`). Register the FMC to a Smart Account with an export-control
+  token; verify `exportControl: true` on `/license/smartlicenses`.

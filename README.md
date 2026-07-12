@@ -158,9 +158,10 @@ directory:
 - **firewall-engineer** — provisions and validates Cisco firewalls: FTDv in
   **local mode** (on-box FDM REST API) and **FMC-managed mode** (registration
   + FMC REST API, incl. the eval-license prerequisite and HA/failover pairing),
-  plus classic ASAv. Knows the day-0 JSON provisioning flow and drives the
-  FDM/FMC APIs directly or via an in-lab toolbox node when the management
-  network isn't externally reachable.
+  **Secure Firewall SD-WAN** (route-based VTI overlay and the FMC SD-WAN
+  auto-VPN wizard driven via the REST API), plus classic ASAv. Knows the day-0
+  JSON provisioning flow and drives the FDM/FMC APIs directly or via an in-lab
+  toolbox node when the management network isn't externally reachable.
 
 The flow: the main session asks the architect to design and build, then fans
 the returned briefs out to the matching specialist (catalyst-engineer,
@@ -178,7 +179,9 @@ design's PDF in its folder (PDFs are gitignored; briefs and links are
 committed); the matching specialist consults the brief when a task maps to that
 design. See the library's [README](Cisco%20Validated%20Designs/README.md) for
 the "add a design" workflow. First entry: **Firewall SD-WAN** (Secure Firewall
-Threat Defense's native SD-WAN → firewall-engineer).
+Threat Defense's native SD-WAN → firewall-engineer) — its hub-and-spoke VTI
+overlay has been **built and validated end-to-end in CML** (FMC SD-WAN auto-VPN
+provisioned over the REST API, iBGP AS 65070 overlay, LAN-to-LAN reachability).
 
 ## Tool reference
 

@@ -280,6 +280,50 @@ Overlay build order (route-based hub-and-spoke, per device then tie together):
    (peer + encaps/decaps) and `show interface ip brief` (Tunnel up/up), then
    BGP adjacency and LAN-to-LAN ping.
 
+### SD-WAN auto-VPN — the wizard, via API (VALIDATED END-TO-END in CML)
+
+Prefer this over the manual overlay above: it is the CVD's SD-WAN wizard, and
+it auto-builds the spoke SVTIs, the spoke tunnel-IP assignment, AND the iBGP
+overlay (the exact thing manual iBGP can't bootstrap — the peer /32 route).
+Proven: hub NYC + spoke WMA, LAN-to-LAN ping 0% loss, iBGP AS 65070 up.
+
+**Requires export-controlled features** (`GET /api/fmc_platform/v1/license/smartlicenses`
+→ `exportControl: true`). In pure Evaluation Mode the SD-WAN topology is
+license-gated (GUI greys it out; the API silently drops `autoVpnSettings`).
+The FMC must be registered to a Smart Account with an export-control token.
+
+Recipe (all on `/policy/ftds2svpns`):
+1. **`topologyType:"AUTO_VPN"`** is the trigger — with `HUB_AND_SPOKE` the FMC
+   returns 201 but **silently drops `autoVpnSettings`** (GET shows it `null`).
+2. Topology body: `{topologyType:"AUTO_VPN", routeBased:true, ikeV2Enabled:true,
+   autoVpnSettings:{routeSettings:{enableBgp:true, autonomousSystemNumber:65070,
+   communityAttribute:1000, communityTagToAdvertiseLearntRoutes:1000,
+   distributeConnectedNetwork:{enableDistribution:true,
+   interfaceSelection:"INSIDE_INTERFACE"}}, spokeSvtiSecurityZone:{TUNNEL zone}}}`.
+3. **Pre-create the hub DVTI** (step 3 above) and an **`IPv4AddressPool`**
+   (`POST /object/ipv4addresspools` {`ipAddressRange`,`mask`}) for the spoke
+   tunnel IPs — a plain `Range` object is rejected ("not of type IPv4").
+4. **Hub endpoint**: `interface` = the DVTI, `peerType:"HUB"`,
+   `isPrimaryHub:true`, `ipv4PoolsForSpokeVti:[{IPv4AddressPool}]`,
+   `insideInterface:[inside phys]`.
+5. **Spoke endpoint**: `interface` = the **physical WAN interface itself**
+   (the outside interface in an OUTSIDE zone), `peerType:"SPOKE"`. FMC
+   auto-creates the spoke SVTI (Tunnel1) and assigns its IP from the hub pool
+   via IKEv2 mode-config. Do NOT pre-create a static VTI on the spoke, and do
+   NOT pass `tunnelSourceInterface` alone — both error. (Physical-WAN-as-
+   `interface` is accepted only under AUTO_VPN; under HUB_AND_SPOKE it errors
+   "Only tunnel interfaces…".)
+6. WAN + inside interfaces must be in **security zones** first, or the auto-VPN
+   won't treat them as VPN interfaces.
+7. Deploy hub+spoke. FMC auto-generates `router bgp 65070` with the peer =
+   remote tunnel IP, `send-community`, `route-map FMC_VPN_RMAP_COMMUNITY_IN/OUT`,
+   and `redistribute connected route-map FMC_VPN_CONNECTED_DIST_RMAP_<community>`
+   — i.e. the CVD iBGP-AS65070 + community-1000 + inside-LAN redistribution.
+   Verify: spoke `show interface ip brief` (Tunnel1 up, pool IP), both
+   `show bgp summary` (neighbor up, 1 pfx), `show route bgp` (remote LAN), ping.
+Dual-ISP redundancy = second AUTO_VPN topology on the backup WAN + ECMP
+(`enableEcmpAtHub`/`enableEcmpAtSpoke` on the topology).
+
 ## ASAv quickref
 
 Day-0 config supported at add_node; console has no login by default; unicon

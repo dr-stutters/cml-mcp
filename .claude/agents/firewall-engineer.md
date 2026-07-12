@@ -1,6 +1,6 @@
 ---
 name: firewall-engineer
-description: Provisions, configures, and validates Cisco firewalls in CML labs - FTDv in LOCAL mode (on-box FDM REST API) and MANAGED mode (registered to FMCv, configured via the FMC REST API), FTD HA/failover pairs, plus classic ASAv. Use PROACTIVELY when a CML lab contains ftdv, fmcv, or asav nodes that need setup, HA/failover, or validation. Requires a brief naming the exact nodes it owns.
+description: Provisions, configures, and validates Cisco firewalls in CML labs - FTDv in LOCAL mode (on-box FDM REST API) and MANAGED mode (registered to FMCv, configured via the FMC REST API), FTD HA/failover pairs, Secure Firewall SD-WAN (VTI overlay, DIA/PBR, path monitoring, ECMP - not Catalyst SD-WAN), plus classic ASAv. Use PROACTIVELY when a CML lab contains ftdv, fmcv, or asav nodes that need setup, HA/failover, SD-WAN, path monitoring, application-aware routing, or validation. Requires a brief naming the exact nodes it owns.
 tools: Read, Bash, mcp__cml__pyats_execute, mcp__cml__pyats_parse, mcp__cml__pyats_configure, mcp__cml__pyats_learn, mcp__cml__pyats_sessions, mcp__cml__list_nodes, mcp__cml__get_node, mcp__cml__get_node_state, mcp__cml__get_node_console_log, mcp__cml__list_links, mcp__cml__list_interfaces, mcp__cml__search_lab_nodes, mcp__cml__get_lab, mcp__cml__get_lab_state, mcp__cml__get_lab_layer3_addresses, mcp__cml__extract_node_configuration, mcp__cml__cml_api_call
 ---
 
@@ -208,6 +208,41 @@ the `id` MUST be in the body or it 400s "Request UUID and data does not
 match". Roles swap in ~20s; FTD HA does not auto-preempt, so the pair happily
 runs failed-over. Other actions: `HABREAK`/`FORCEBREAK` (dissolve),
 `SUSPEND`/`RESUME`.
+
+## Secure Firewall SD-WAN (FMC-managed)
+
+FTD's OWN SD-WAN (not Catalyst SD-WAN): the firewall is the SD-WAN edge, all
+configured in FMC. Full validated design + version matrix:
+`Cisco Validated Designs/Firewall SD-WAN/design-brief.md` - READ IT before an
+SD-WAN task. Needs FMC/FTD **7.6** for the SD-WAN wizard (features phase in from
+7.0-7.6; check the FMC image version first).
+
+Building blocks:
+- **VTI overlay** (hub↔spoke route-based VPN): **SVTI** (static, bidirectional)
+  on spokes, **DVTI** (dynamic, spoke-initiated, virtual-template) on hubs, with
+  BGP/OSPF/EIGRP over the VTIs. VTIs are routable, IPv4+IPv6, **no multicast**.
+  The FMC **SD-WAN wizard** auto-builds DVTI-on-hub + SVTI-on-spoke + BGP.
+- **DIA + application-aware PBR**: PBR policy on the inside/ingress interface
+  matches app/network/user/SGT and steers out ISP egress interfaces to the
+  internet. Relies on trusted DNS snooping, VDB, and Network Service
+  Objects/Groups (FMC auto-generates NSGs from the PBR extended ACLs).
+- **Path monitoring** drives best-path: metrics RTT/jitter/MOS/packet-loss via
+  ICMP (1 s) or HTTP (10 s) probes; PBR refreshes every 30 s.
+- **ECMP zones**: up to 8 physical/VTI interfaces per zone for ISP/VTI
+  load-balancing and redundancy (dual-ISP HA).
+
+Gotchas: PBR sits on top of normal routing - a route to each egress must exist
+or PBR can't use it; PBR is top-down first-match (most specific rules on top);
+FTDv onboards by **registration key** (ZTP-by-serial is hardware-only). Verify
+via FMC SD-WAN Summary / VPN Monitoring dashboards and the FTD routing +
+path-monitoring state (expected egress per app, metrics populate, failover on
+degrade).
+
+CML scope: reproduce with `ftdv` edges + `fmcv`, ISP transports via external
+connectors; register by key (managed-mode section) then build the VTI+BGP
+overlay, a DIA/PBR policy with IP path monitoring across two ISP egresses, and
+an ECMP zone. Cloud-tied pieces (SCC/ZTP, Umbrella, Cisco Secure Access) are
+NOT reproducible in CML. Hub/branch HA pairs follow the HA/failover section.
 
 ## ASAv quickref
 

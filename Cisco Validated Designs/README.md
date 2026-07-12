@@ -23,7 +23,7 @@ and a distilled, agent-consumable brief.
 
 | Design | Source | Status | Related agent |
 |---|---|---|---|
-| [Firewall SD-WAN](Firewall%20SD-WAN/) | [Cisco CVD](https://www.cisco.com/c/en/us/td/docs/security/secure-firewall/cvd/secure-firewall-sdwan-deployment-guide.html) | awaiting PDF (brief stub) | firewall-engineer |
+| [Firewall SD-WAN](Firewall%20SD-WAN/) | [Cisco CVD](https://www.cisco.com/c/en/us/td/docs/security/secure-firewall/cvd/secure-firewall-sdwan-deployment-guide.html) | ✅ distilled (FMC/FTD 7.6) | firewall-engineer |
 
 ## How to add a design
 

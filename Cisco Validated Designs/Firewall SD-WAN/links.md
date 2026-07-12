@@ -8,4 +8,9 @@
 > policy-based routing, direct internet access) — **not** Cisco Catalyst
 > SD-WAN (vManage/vSmart/vBond/cEdge).
 
+- **Deployment/config guide (detailed FMC procedures):**
+  `firewall-sd_wan-deployment.pdf` (in this folder) — Route-based VPN hub &
+  spoke (DVTI/SVTI), OSPF/BGP over the tunnel, backup VTI + ECMP, DIA with
+  PBR + path monitoring, and the SD-WAN wizard. Written for the FMC GUI.
+
 <!-- Add related links below (config guides, feature docs, release notes). -->

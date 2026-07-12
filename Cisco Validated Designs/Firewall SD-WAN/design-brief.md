@@ -115,11 +115,24 @@ external connectors for the ISP transports.
 
 ## CML validation notes
 
-Reproducible slice: `fmcv` + one or more `ftdv` as SD-WAN edges, ISP transports
-via external connectors / unmanaged switches, an inside host. Register the FTDs
-by key (see firewall-engineer **managed mode** + the eval-license
-prerequisite), then exercise the on-box features: build a hub↔spoke VTI + BGP
-overlay (or the SD-WAN wizard if the FMC image is 7.6), a DIA/PBR policy with
-IP path monitoring across two "ISP" egresses, and an ECMP zone. Cloud-tied
-pieces (SCC/ZTP, Umbrella, Secure Access) can't be validated in CML. FTD HA
-pairs (hubs/NCT) follow the firewall-engineer **HA/failover** section.
+Reproducible slice: `fmcv` + `ftdv` SD-WAN edges, ISP transports simulated
+in-lab (IOL routers / switches, all RFC1918), inside hosts. Only the FMC/FTD
+management is bridged out. Cloud-tied pieces (SCC/ZTP, Umbrella, Secure Access)
+can't be validated in CML. Hardware models (FPR-3105/1010/1120) → all `ftdv`.
+
+**Build order that works** (see firewall-engineer "Building SD-WAN via the FMC
+REST API"): register FTDs by key (+ eval-license prereq) → physical interfaces
++ zones → loopbacks → VTIs (DVTI hub / SVTI spoke) → route-based hub-spoke VPN
+topology → **iBGP AS 65070 over the tunnel** (required — a DVTI can't be
+static-routed) → ACP for the tunnel zone → deploy → verify.
+
+**Status (in progress):** 6-site topology (2 hubs + 4 spokes, dual ISP) built
+and all FTDv registered; NYC↔WMA VTI overlay tunnel proven **up/up** with an
+IPsec SA. Remaining: iBGP + LAN reachability, the 2nd ISP topology (backup VTI
++ ECMP), the other spokes' LAN protocols (static/eBGP/OSPF/EIGRP →
+redistribution), and DIA. See memory `firewall-sdwan-cvd-lab`.
+
+**Hard-won finding:** the FMC VPN/VTI config is not REST-discoverable by
+guessing — pull the exact schemas from the API Explorer OpenAPI spec at
+`https://<fmc>/api/api-explorer/fmc.json`. Key VTI field: borrow-IP =
+`ipAddressAssignmentType:"BORROW_IP_FROM_INTERFACE"` + `borrowIPfrom:{loopback}`.

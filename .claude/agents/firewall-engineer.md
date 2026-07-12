@@ -244,6 +244,42 @@ overlay, a DIA/PBR policy with IP path monitoring across two ISP egresses, and
 an ECMP zone. Cloud-tied pieces (SCC/ZTP, Umbrella, Cisco Secure Access) are
 NOT reproducible in CML. Hub/branch HA pairs follow the HA/failover section.
 
+### Building SD-WAN via the FMC REST API (validated in CML)
+
+The VPN/VTI/SD-WAN config is GUI-first and NOT discoverable by guessing JSON
+fields. **Get exact schemas from the FMC API Explorer OpenAPI spec:**
+`GET https://<fmc>/api/api-explorer/fmc.json` (a large OpenAPI doc; auth with
+the X-auth-access-token). Search its `definitions` for the model, e.g.
+`FTDVTIInterface`, `FTDS2SVpnModel`, `VpnEndpoint`. Do this before hand-writing
+any complex FMC body - it turns hours of 422/400 guessing into minutes.
+
+Overlay build order (route-based hub-and-spoke, per device then tie together):
+1. **Physical interfaces** - PUT `.../physicalinterfaces/{id}`: `mode:"NONE"`
+   (routed), `ifname`, `enabled:true`, `securityZone`, `ipv4:{static:{address,
+   netmask}}` (netmask as prefix e.g. "24").
+2. **Loopback** for the tunnel IP - POST `.../loopbackinterfaces`
+   {`LoopbackInterface`, `loopbackId`, `ifname`, `ipv4.static` /32}.
+3. **VTI** - POST `.../virtualtunnelinterfaces`. Mandatory `tunnelId`;
+   `tunnelType` DYNAMIC (hub) / STATIC (spoke); `tunnelSource` = the outside
+   PhysicalInterface; `ipsecMode:"ipv4"`. Borrow-IP field (the non-obvious
+   one): `ipAddressAssignmentType:"BORROW_IP_FROM_INTERFACE"` +
+   `borrowIPfrom:{loopback ref}`. Assign the TUNNEL security zone. A DVTI is
+   created without an IP; do not set a static IP on it.
+4. **VPN topology** - POST `/policy/ftds2svpns` {`topologyType:"HUB_AND_SPOKE"`,
+   `routeBased:true`, `ikeV2Enabled:true`}; IKE/IPsec settings auto-default.
+   Then POST `.../{id}/endpoints` for hub and spoke: each needs a top-level
+   `name` AND named `device`/`interface` refs (missing names -> "Node name is
+   empty" 400). `peerType` HUB/SPOKE, hub `isPrimaryHub:true`, interface =
+   that device's VTI.
+5. **Dynamic routing over the tunnel is REQUIRED** - a DVTI hub cannot be
+   static-routed (dynamic virtual-template). Use iBGP (CVD: AS 65070) or OSPF:
+   `bgpgeneralsettings` (asNumber) + `/routing/bgp` neighbors over the tunnel/
+   loopback IPs, redistributing the inside LANs. ECMP zone over the
+   primary+backup VTIs for dual-ISP redundancy.
+6. **Deploy**, then verify from the spoke console: `show crypto ipsec sa`
+   (peer + encaps/decaps) and `show interface ip brief` (Tunnel up/up), then
+   BGP adjacency and LAN-to-LAN ping.
+
 ## ASAv quickref
 
 Day-0 config supported at add_node; console has no login by default; unicon

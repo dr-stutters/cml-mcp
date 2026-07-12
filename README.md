@@ -9,10 +9,12 @@ manage the CML system itself, and everything in between.
 Built directly against the CML REST API (`/api/v0`); developed and tested
 against **CML 2.10** (build 13).
 
-> **Companion: [Firepower MCP](../Firepower_MCP)** — a sibling MCP server for the
-> Cisco Secure Firewall Management Center (FMC) REST API. It's registered as the
-> `fmc` server in [.mcp.json](.mcp.json) and used by the firewall-engineer agent,
-> so FMC device/VPN/HA work runs through `mcp__fmc__*` tools instead of raw HTTP.
+> 🆕 **New companion server — [Firepower MCP](https://github.com/dr-stutters/firepower-mcp).**
+> A standalone sibling MCP server for the Cisco Secure Firewall Management Center
+> (FMC) REST API. It's registered here as the `fmc` server in
+> [.mcp.json](.mcp.json) and used by the firewall-engineer agent, so all FMC
+> work — devices, deploy, VTIs/VPN, SD-WAN, routing, HA — runs through
+> `mcp__fmc__*` tools instead of raw HTTP. See [the section below](#companion-server-firepower-fmc-mcp).
 
 ## What it can do
 
@@ -33,6 +35,30 @@ against **CML 2.10** (build 13).
   free interfaces automatically; annotations get sensible style defaults;
   large responses are truncated safely; node definition listings are compact
   by default.
+
+## Companion server: Firepower (FMC) MCP
+
+CML gives you the fabric; **[Firepower MCP](https://github.com/dr-stutters/firepower-mcp)**
+gives you the firewalls. It's a separate, independently usable MCP server for the
+**Cisco Secure Firewall Management Center (FMC)** REST API, built to the same
+pattern as this one (FastMCP, async httpx). Once the two are combined, an agent
+can build a topology in CML *and* fully configure the FTDs on it.
+
+- **51 tools** across devices, deploy (deploy-and-wait), interfaces/VTIs/loopbacks,
+  objects, site-to-site & SD-WAN (`AUTO_VPN`) VPN, routing (BGP/OSPF/EIGRP), FTD
+  HA pairs, access policies, and licensing.
+- **Spec-driven discovery** — `fmc_search_spec` + `fmc_get_definition` search the
+  FMC API Explorer OpenAPI doc for any endpoint and its exact schema/enums, and
+  `fmc_api_call` is the generic escape hatch for everything else.
+- **Wired in here** — registered as the `fmc` server in
+  [.mcp.json](.mcp.json) (it runs the sibling repo at `../Firepower_MCP`), and the
+  **firewall-engineer** agent uses its `mcp__fmc__*` tools directly. Set the
+  `FMC_*` credentials as env vars or in `../Firepower_MCP/.env` (see
+  [.env.example](.env.example)).
+
+Clone it alongside this repo (`../Firepower_MCP`) to enable the `fmc` server, or
+use it entirely on its own — see its
+[README](https://github.com/dr-stutters/firepower-mcp).
 
 ## Requirements
 

@@ -321,8 +321,17 @@ Recipe (all on `/policy/ftds2svpns`):
    — i.e. the CVD iBGP-AS65070 + community-1000 + inside-LAN redistribution.
    Verify: spoke `show interface ip brief` (Tunnel1 up, pool IP), both
    `show bgp summary` (neighbor up, 1 pfx), `show route bgp` (remote LAN), ping.
-Dual-ISP redundancy = second AUTO_VPN topology on the backup WAN + ECMP
-(`enableEcmpAtHub`/`enableEcmpAtSpoke` on the topology).
+**Dual-ISP ECMP (validated):** build a *second* AUTO_VPN topology over the
+backup WAN — 2nd hub loopback + DVTI sourced from the 2nd outside interface,
+its own `IPv4AddressPool`, spoke endpoint `interface` = the 2nd physical WAN.
+Set **`autoVpnSettings.routeSettings.enableMultiPath:true`** — FMC adds
+`maximum-paths ibgp N` to the shared `router bgp` so the same LAN installs via
+both tunnels (true ECMP, both transports active), not just failover. Verify:
+spoke has two Tunnels + two iBGP neighbors up, `show route bgp` shows the remote
+LAN via both next-hops ("N multipath paths"). Note (CML artifact): FTDv doesn't
+see carrier-loss from an unmanaged switch, so an ISP-link-down failover is
+driven by IPsec DPD (~40-60s), not interface-down; traffic still survives on the
+surviving ISP.
 
 ## ASAv quickref
 

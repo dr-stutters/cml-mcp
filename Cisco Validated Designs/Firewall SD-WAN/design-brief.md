@@ -131,8 +131,11 @@ static-routed) → ACP for the tunnel zone → deploy → verify.
 WMA proven working over the **SD-WAN auto-VPN**: FMC auto-built the spoke SVTI
 (Tunnel1, pool IP 10.255.255.100), auto-configured **iBGP AS 65070**
 (neighbor up, LANs exchanged with community 1000), and **NYC-HOST → WMA-HOST
-ping is 0% loss** across the VTI overlay. Remaining: 2nd ISP topology (backup
-VTI + ECMP), the other spokes (PRI/NCT/MCT LAN protocols → redistribution),
+ping is 0% loss** across the VTI overlay. **Dual-ISP ECMP done**: a 2nd
+AUTO_VPN topology over ISP2 (`enableMultiPath`) gives two active tunnels + two
+iBGP sessions and installs the remote LAN via both next-hops; an ISP1
+link-down failover test kept the host-to-host ping at 0% loss (rode ISP2).
+Remaining: the other spokes (PRI/NCT/MCT LAN protocols → redistribution),
 NNJ 2nd hub, DIA, hub HA. See memory `firewall-sdwan-cvd-lab`.
 
 **Hard-won findings:**

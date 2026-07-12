@@ -72,7 +72,7 @@ It's a separate, independently usable MCP server for **Cisco Identity Services
 Engine (ISE)**, built to the same pattern (FastMCP, async httpx). ISE is usually
 an external VM rather than a CML node.
 
-- **108 tools** across three REST surfaces (all HTTP Basic auth): **OpenAPI**
+- **117 tools** across three REST surfaces (all HTTP Basic auth): **OpenAPI**
   (443, `/api/…`) for endpoints, TrustSec (SGT/SGACL/egress), policy sets and
   policy authoring, day-2 ops (repositories, backups, patches, licensing,
   certificates + management, system summary), guest/sponsor, profiler, RBAC/admin;

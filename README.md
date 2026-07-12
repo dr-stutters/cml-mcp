@@ -9,6 +9,11 @@ manage the CML system itself, and everything in between.
 Built directly against the CML REST API (`/api/v0`); developed and tested
 against **CML 2.10** (build 13).
 
+> **Companion: [Firepower MCP](../Firepower_MCP)** — a sibling MCP server for the
+> Cisco Secure Firewall Management Center (FMC) REST API. It's registered as the
+> `fmc` server in [.mcp.json](.mcp.json) and used by the firewall-engineer agent,
+> so FMC device/VPN/HA work runs through `mcp__fmc__*` tools instead of raw HTTP.
+
 ## What it can do
 
 - **Full API coverage** — 73 tools spanning labs, nodes, links, interfaces,

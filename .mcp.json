@@ -3,6 +3,10 @@
     "cml": {
       "command": "uv",
       "args": ["run", "cml-mcp"]
+    },
+    "fmc": {
+      "command": "uv",
+      "args": ["run", "--directory", "../Firepower_MCP", "fmc-mcp"]
     }
   }
 }

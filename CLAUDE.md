@@ -4,6 +4,12 @@ MCP server for Cisco Modeling Labs (Python 3.11+, uv, FastMCP, httpx, pyATS).
 Source in `src/cml_mcp/`; live-server tests in `tests/` (both create and
 delete their own scratch labs). Config comes from `.env` (never commit it).
 
+**Companion Firepower MCP:** the `fmc` server (registered in `.mcp.json`, source
+in the sibling repo `../Firepower_MCP`) wraps the FMC REST API - the
+firewall-engineer agent uses its `mcp__fmc__*` tools (spec search, devices,
+deploy, interfaces/VTIs, VPN/SD-WAN, routing, HA) instead of raw httpx. Set its
+`FMC_*` creds as env vars or in `../Firepower_MCP/.env`.
+
 ## Orchestrating lab work with the specialist agents
 
 This repo ships Claude Code agents in `.claude/agents/`:

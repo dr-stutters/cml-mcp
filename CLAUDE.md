@@ -45,3 +45,12 @@ Boot times: IOL nodes boot in seconds; IOSv ~2-3 min; CSR/Cat8kv ~4-6 min;
 ASAv ~2-4 min; FTDv BOOTED ~5 min but FDM API 10-20 min more; FMCv ~15-30 min.
 Wait for BOOTED (`get_node_state`) before delegating device configuration,
 and check host capacity before building FMC labs (FMCv alone wants 32 GB).
+
+## Cisco Validated Designs library
+
+`Cisco Validated Designs/` holds reference designs, one subfolder each, with a
+distilled `design-brief.md` per design. When a lab request maps to a design,
+the matching specialist should consult that brief (e.g. firewall-engineer reads
+`Cisco Validated Designs/Firewall SD-WAN/design-brief.md`). See the library
+[README](Cisco%20Validated%20Designs/README.md) for the "add a design" workflow.
+Source PDFs are gitignored (kept local); the briefs and links are committed.

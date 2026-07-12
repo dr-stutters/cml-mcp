@@ -4,3 +4,10 @@ __pycache__/
 *.pyc
 dist/
 *.egg-info/
+
+# Cisco Validated Designs: keep distilled briefs + links, but not large binary sources
+Cisco Validated Designs/**/*.pdf
+Cisco Validated Designs/**/*.pptx
+Cisco Validated Designs/**/*.docx
+Cisco Validated Designs/**/*.zip
+Cisco Validated Designs/**/*.vsdx

@@ -169,6 +169,17 @@ agents must never share a node's console. See [CLAUDE.md](CLAUDE.md) for the
 full protocol. Further specialists (SP/DC, wireless/identity) follow the same
 pattern.
 
+### Cisco Validated Designs library
+
+[`Cisco Validated Designs/`](Cisco%20Validated%20Designs/) is a growing library
+of reference designs — one subfolder each, holding the source materials and a
+distilled `design-brief.md` that expands the relevant agent's knowledge. Drop a
+design's PDF in its folder (PDFs are gitignored; briefs and links are
+committed); the matching specialist consults the brief when a task maps to that
+design. See the library's [README](Cisco%20Validated%20Designs/README.md) for
+the "add a design" workflow. First entry: **Firewall SD-WAN** (Secure Firewall
+Threat Defense's native SD-WAN → firewall-engineer).
+
 ## Tool reference
 
 ### Labs

@@ -11,3 +11,6 @@ Cisco Validated Designs/**/*.pptx
 Cisco Validated Designs/**/*.docx
 Cisco Validated Designs/**/*.zip
 Cisco Validated Designs/**/*.vsdx
+
+# FMC API Explorer OpenAPI spec (9MB, regenerable from the live FMC)
+Cisco Validated Designs/**/fmc-api-explorer-spec.json

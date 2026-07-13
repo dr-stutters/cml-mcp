@@ -24,6 +24,10 @@
     "splunk": {
       "command": "uv",
       "args": ["run", "--directory", "../Splunk_MCP", "splunk-mcp"]
+    },
+    "wlc": {
+      "command": "uv",
+      "args": ["run", "--directory", "../WLC_MCP", "wlc-mcp"]
     }
   }
 }

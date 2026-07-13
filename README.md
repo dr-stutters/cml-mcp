@@ -11,18 +11,20 @@ against **CML 2.10** (build 13).
 
 > 🆕 **Companion servers — [Firepower MCP](https://github.com/dr-stutters/firepower-mcp),
 > [ISE MCP](https://github.com/dr-stutters/ise-mcp),
-> [Windows MCP](https://github.com/dr-stutters/windows-mcp) and
-> [Splunk MCP](https://github.com/dr-stutters/splunk-mcp).**
+> [Windows MCP](https://github.com/dr-stutters/windows-mcp),
+> [Splunk MCP](https://github.com/dr-stutters/splunk-mcp) and
+> [WLC MCP](https://github.com/dr-stutters/wlc-mcp).**
 > Standalone sibling MCP servers for the Cisco Secure Firewall Management Center
 > (FMC), Cisco Identity Services Engine (ISE), Windows Server (AD/DNS/DHCP/AD
-> CS over WinRM), and Splunk Enterprise (SIEM/observability). They're registered
-> here as the `fmc`, `ise`, `windows` and `splunk` servers in
-> [.mcp.json](.mcp.json) and used by the firewall-engineer, ise-engineer,
-> windows-engineer and splunk-engineer agents — that work runs through
-> `mcp__fmc__*` / `mcp__ise__*` / `mcp__windows__*` / `mcp__splunk__*` tools, no
-> raw HTTP/WinRM. See [Firepower](#companion-server-firepower-fmc-mcp),
-> [ISE](#companion-server-cisco-ise-mcp), [Windows](#companion-server-windows-server-mcp)
-> and [Splunk](#companion-server-splunk-mcp) below.
+> CS over WinRM), Splunk Enterprise (SIEM/observability), and the Catalyst 9800
+> Wireless LAN Controller (RESTCONF). They're registered here as the `fmc`, `ise`,
+> `windows`, `splunk` and `wlc` servers in [.mcp.json](.mcp.json) and used by the
+> firewall-engineer, ise-engineer, windows-engineer, splunk-engineer and
+> wireless-engineer agents — that work runs through `mcp__fmc__*` / `mcp__ise__*` /
+> `mcp__windows__*` / `mcp__splunk__*` / `mcp__wlc__*` tools, no raw HTTP/WinRM. See
+> [Firepower](#companion-server-firepower-fmc-mcp),
+> [ISE](#companion-server-cisco-ise-mcp), [Windows](#companion-server-windows-server-mcp),
+> [Splunk](#companion-server-splunk-mcp) and [WLC](#companion-server-wlc-mcp) below.
 
 ## What it can do
 
@@ -150,6 +152,29 @@ separate, independently usable MCP server for **Splunk Enterprise**.
 Clone it alongside this repo (`../Splunk_MCP`) to enable the `splunk` server, or
 use it entirely on its own — see its
 [README](https://github.com/dr-stutters/splunk-mcp).
+
+## Companion server: WLC MCP
+
+CML gives you the fabric; **[WLC MCP](https://github.com/dr-stutters/wlc-mcp)** gives
+you the **wireless controller**. It's a separate, independently usable MCP server for
+the **Cisco Catalyst 9800** WLC over **RESTCONF** (IOS-XE YANG).
+
+- **26 tools** — WLANs, **AAA/RADIUS to ISE** (server/group/dot1x method list),
+  policy profiles + tags, site/RF/AP-join tags, client/AP operational data, plus a
+  `wlc_restconf_call` escape hatch + `wlc_list_models` discovery. RESTCONF on `443`
+  (HTTPS Basic); `wlc_check` probes it (nginx yang-management lags the boot).
+- **Wireless NAC** — pairs with the ISE MCP: onboard the WLC as a NAD, point its
+  802.1X WLAN at ISE. **CML caveat:** CML's hostapd `wireless-ap` can't CAPWAP-join
+  a C9800, so a CML C9800 has no live APs/clients — the `wlc` server still manages
+  its full config, and live wireless 802.1X is proven separately via the hostapd AP
+  + wpa_supplicant client (real EAP → hostapd → RADIUS → ISE).
+- **Wired in here** — registered as the `wlc` server in [.mcp.json](.mcp.json) (it
+  runs the sibling repo at `../WLC_MCP`), and the **wireless-engineer** agent uses
+  its `mcp__wlc__*` tools. Set the `WLC_*` credentials as env vars or in
+  `../WLC_MCP/.env`.
+
+Clone it alongside this repo (`../WLC_MCP`) to enable the `wlc` server, or use it
+entirely on its own — see its [README](https://github.com/dr-stutters/wlc-mcp).
 
 ## Requirements
 

@@ -45,6 +45,19 @@ CML caps Docker nodes to **1 CPU**; RAM overrides fine) or, for real multi-core,
 reachability. Prefer installing existing Splunkbase add-ons (Cisco Security Cloud,
 Cisco ISE, Microsoft Windows) and their prebuilt dashboards over hand-built panels.
 
+**Companion WLC MCP:** the `wlc` server (registered in `.mcp.json`, source in the
+sibling repo `../WLC_MCP`) drives a **Cisco Catalyst 9800 Wireless LAN Controller**
+over **RESTCONF** (IOS-XE YANG, HTTPS Basic) - the wireless-engineer agent uses its
+`mcp__wlc__*` tools (WLANs, AAA/RADIUS to ISE, policy/site/RF tags, client/AP oper,
++ a `wlc_restconf_call` escape hatch) instead of raw httpx. Enable on the C9800:
+`aaa new-model` + a priv-15 local user + `ip http secure-server` + `restconf`
+(RESTCONF/nginx lags the boot by minutes - `wlc_check` probes it). Set `WLC_*` creds
+as env vars or in `../WLC_MCP/.env`. **CML caveat:** CML's simulated `wireless-ap`
+runs hostapd and can't CAPWAP-join a C9800, so a CML C9800 has no live APs/clients -
+the `wlc` server still manages its full config; live wireless 802.1X in CML is done
+separately via the hostapd AP + wpa_supplicant client (real EAP over the shared
+`airduct`/hwsim RF medium, hostapd as the RADIUS authenticator to ISE).
+
 ## Orchestrating lab work with the specialist agents
 
 This repo ships Claude Code agents in `.claude/agents/`:
@@ -69,6 +82,11 @@ This repo ships Claude Code agents in `.claude/agents/`:
   saved searches, users/roles, and installing Splunkbase apps/add-ons and their
   prebuilt dashboards - via the `mcp__splunk__*` tools. Owns the Splunk receiving
   side + verification; device-side log forwarding is done by the device agents.
+- **wireless-engineer** - wireless/NAC specialist for Cisco Catalyst 9800 WLCs and
+  802.1X wireless: configures the C9800 (WLANs, AAA/RADIUS to ISE, policy/site/RF
+  tags) over RESTCONF via the `mcp__wlc__*` tools, and drives live wireless 802.1X
+  to ISE using CML's hostapd AP + wpa_supplicant client (hostapd ≠ CAPWAP, so the
+  controller and the live client are two separate paths in CML).
 
 Protocol for lab requests involving these device families:
 
@@ -78,7 +96,8 @@ Protocol for lab requests involving these device families:
    `ManageLocally` / `FmcIp`) - ask the user if it isn't stated.
 2. Fan each brief out to the matching specialist (**catalyst-engineer**,
    **firewall-engineer**, **ise-engineer**, **windows-engineer**,
-   **splunk-engineer**), passing the brief verbatim. Parallel invocations
+   **splunk-engineer**, **wireless-engineer**), passing the brief verbatim. Parallel
+   invocations
    are fine ONLY if their node sets are disjoint - two agents must never
    drive the same node's console (each agent runs its own MCP server process;
    the per-device locks don't protect across agents).

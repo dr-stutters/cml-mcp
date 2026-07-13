@@ -242,7 +242,11 @@ deploy the pair; the secondary then syncs to Standby.**
 FTD's OWN SD-WAN (not Catalyst SD-WAN): the firewall is the SD-WAN edge, all
 configured in FMC. Full validated design + version matrix:
 `Cisco Validated Designs/Firewall SD-WAN/design-brief.md` - READ IT before an
-SD-WAN task. Needs FMC/FTD **7.6** for the SD-WAN wizard (features phase in from
+SD-WAN task. The same folder has the validated build sequence (`runbook.md`)
+and a captured `topology.yaml` - one `build_lab_from_spec` call rebuilds the
+full 25-node end-state lab (FTD day-0 FMC registration + validated ISP/LAN
+router configs baked in); you then re-apply the FMC-side overlay per the
+runbook. Needs FMC/FTD **7.6** for the SD-WAN wizard (features phase in from
 7.0-7.6; check the FMC image version first).
 
 Building blocks:

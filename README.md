@@ -243,7 +243,7 @@ registers the server for this project automatically.
 over stdio. An HTTP transport is available with
 `cml-mcp --transport streamable-http` for clients that prefer it.
 
-## Using it
+## How to use this
 
 Once connected, just describe what you want in natural language. Examples:
 
@@ -265,11 +265,12 @@ Once connected, just describe what you want in natural language. Examples:
 A typical agent workflow maps to tools like this:
 
 ```
+build_lab_from_spec (one call: nodes + links + briefs)   # or the granular path:
 create_lab -> add_node (xN) -> create_link (xN) -> control_lab(start)
   -> get_lab_state (until converged)
   -> pyats_configure / pyats_parse / pyats_execute   (interact with devices)
   -> extract_node_configuration                       (persist configs)
-  -> export_lab                                       (save as YAML)
+  -> export_lab_spec / export_lab                     (save as code / native YAML)
 ```
 
 Things worth knowing:
@@ -291,7 +292,7 @@ Things worth knowing:
 
 ## Specialist agents (Claude Code)
 
-The repo ships five Claude Code agent definitions in
+The repo ships seven Claude Code agent definitions in
 [.claude/agents/](.claude/agents/) — other MCP clients can ignore this
 directory:
 
@@ -321,14 +322,20 @@ directory:
   **AD CS** (a certificate authority) via the companion Windows MCP's
   `mcp__windows__*` tools. The identity/PKI/DNS backing for ISE — external
   identity, EAP-TLS via the CA cert, and resolvable names for ISE CSRs.
+- **splunk-engineer** — observability/SIEM specialist for **Splunk Enterprise**
+  via the companion Splunk MCP's `mcp__splunk__*` tools: indexes, syslog/HEC
+  ingest, SPL searches, and Splunkbase add-ons + their prebuilt dashboards.
+  Owns the receiving side; the device agents configure log forwarding.
+- **wireless-engineer** — wireless/NAC specialist for the **Catalyst 9800 WLC**
+  (RESTCONF via the companion WLC MCP's `mcp__wlc__*` tools) and live wireless
+  802.1X in CML (hostapd AP ↔ wpa_supplicant client → ISE). Knows the
+  hostapd≠CAPWAP two-path reality and the C9800-CL Vlan1 mgmt gotcha.
 
-The flow: the main session asks the architect to design and build, then fans
-the returned briefs out to the matching specialist (catalyst-engineer,
-firewall-engineer, ise-engineer, windows-engineer) — in parallel when device
-groups are disjoint, since two agents must never share a node's console. See
-[CLAUDE.md](CLAUDE.md) for the full protocol. Further specialists (SP/DC,
-wireless) follow the same
-pattern.
+The flow: the main session asks the architect to design and build (spec-first
+via `build_lab_from_spec`, whose report includes ready-made briefs), then fans
+the briefs out to the matching specialists — in parallel when device groups are
+disjoint, since two agents must never share a node's console. See
+[CLAUDE.md](CLAUDE.md) for the full protocol.
 
 ### Cisco Validated Designs library
 
@@ -342,6 +349,19 @@ the "add a design" workflow. First entry: **Firewall SD-WAN** (Secure Firewall
 Threat Defense's native SD-WAN → firewall-engineer) — its hub-and-spoke VTI
 overlay has been **built and validated end-to-end in CML** (FMC SD-WAN auto-VPN
 provisioned over the REST API, iBGP AS 65070 overlay, LAN-to-LAN reachability).
+
+### Custom Designs library
+
+[`Custom Designs/`](Custom%20Designs/) is the counterpart for **our own**
+validated lab builds: one subfolder per design, each with a repeatable
+`runbook.md` (prerequisites → topology → stage-by-stage config → verification →
+gotchas) and, where captured, a **`topology.yaml`** lab spec so the whole
+topology rebuilds with one `build_lab_from_spec` call. Full designs so far:
+**ISE NAC Lab** (MAB / PEAP / EAP-TLS / TrustSec / CoA / CTS against ISE
+3.4+3.5) and **Wireless NAC** (C9800 config path + live hostapd 802.1X), plus
+six reusable FMC/FTD component runbooks — the **Firewall SD-WAN** CVD also has
+a captured `topology.yaml`. See the library's
+[README](Custom%20Designs/README.md).
 
 ## Tool reference
 

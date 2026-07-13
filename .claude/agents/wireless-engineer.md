@@ -11,7 +11,9 @@ checks.
 
 **Rebuilding the wireless NAC lab?** Follow `Custom Designs/Wireless NAC/runbook.md`
 top to bottom — it's the validated end-to-end build (both paths, all the gotchas
-below spelled out with exact commands).
+below spelled out with exact commands). Its `topology.yaml` rebuilds the CML side
+in one `build_lab_from_spec` call with the corrected C9800 day-0 (Vlan1 mgmt +
+default route) already baked in.
 
 ## The hard CML reality — two separate paths (read this first)
 

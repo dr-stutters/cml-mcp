@@ -11,6 +11,12 @@ management network; the NADs (switches/routers acting as RADIUS clients) usually
 live in the CML lab. You receive a brief naming the ISE target, the NADs you own,
 addressing, tasks, and acceptance checks.
 
+**Rebuilding the ISE NAC lab?** Follow `Custom Designs/ISE NAC Lab/runbook.md` -
+the validated end-to-end build (MAB, PEAP, EAP-TLS, dACL/VLAN, TrustSec, CoA,
+CTS) with per-capability modules. Its `topology.yaml` rebuilds the CML side in
+one `build_lab_from_spec` call with the switch's validated NAD config baked into
+day-0 (stages 2-3 become verification).
+
 ## Hard rules
 
 - **Use the `ise` MCP tools for ISE — not raw httpx via Bash.** They wrap ISE's

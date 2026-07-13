@@ -458,6 +458,14 @@ Hard-won lessons, encoded in the specialist agents and worth knowing:
   `STARTED`, so no traffic passes and the device sees it down/down. Verify both
   link and interface state (`list_links`, `list_interfaces`) and
   `set_interface_state` start them before diagnosing anything inside a device.
+- **cat9000v MAB/802.1X RADIUS won't cross the Mgmt-vrf.** On a Catalyst 9000v the
+  auth-manager (SMD) RADIUS for MAB/dot1x silently times out over the OOB management
+  port (Gi0/0, Mgmt-vrf) even though IOSd RADIUS (`test aaa`) succeeds there — source
+  RADIUS from a **front-panel data port in the global routing table** instead. And
+  the lightweight L2 sims (**iosvl2**, **ioll2-xe**) accept the `mab` config but never
+  hand the endpoint frame to the auth-manager, so MAB never fires: use a real
+  dataplane switch (**cat9000v**) for NAC testing. Validated end-to-end (MAB →
+  PermitAccess) against ISE 3.4 and 3.5.
 - **"Booted" is not "ready" for Firepower.** FTDv reaches BOOTED in ~5 min but
   its FDM/registration services take 10-20 min more; FMCv takes ~15-30 min and
   its REST API answers before it is fully ready. Poll patiently.

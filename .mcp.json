@@ -12,6 +12,11 @@
       "command": "uv",
       "args": ["run", "--directory", "../ISE_MCP", "ise-mcp"]
     },
+    "ise35": {
+      "command": "uv",
+      "args": ["run", "--directory", "../ISE_MCP", "ise-mcp"],
+      "env": { "ISE_URL": "https://198.18.134.35" }
+    },
     "windows": {
       "command": "uv",
       "args": ["run", "--directory", "../Windows_MCP", "windows-mcp"]

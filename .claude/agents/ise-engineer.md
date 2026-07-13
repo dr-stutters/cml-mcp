@@ -101,8 +101,9 @@ return an ISE-side 500 on some builds, so treat it best-effort).
 
 ## NAC on CML — hard-won gotchas (validated end-to-end)
 
-The full wired-802.1X stack has been proven in CML against ISE 3.4 and 3.5 — MAB,
-PEAP-MSCHAPv2 against AD, and EAP-TLS. Bake in these traps:
+The full wired-NAC stack has been proven in CML against ISE 3.4 and 3.5 — MAB,
+PEAP-MSCHAPv2 against AD, EAP-TLS, dynamic authZ (dACL/VLAN), TrustSec SGT+SGACL
+enforcement, CoA, and full CTS policy download. Bake in these traps:
 
 - **cat9000v RADIUS must source from a front-panel, global-table interface — NOT
   the OOB Mgmt-vrf port (Gi0/0).** The auth-manager (SMD) RADIUS for MAB/dot1x
@@ -142,6 +143,39 @@ PEAP-MSCHAPv2 against AD, and EAP-TLS. Bake in these traps:
   in MnT even when auth passes at the RADIUS layer; a patched box (3.5.0.527 p3)
   shows them in seconds. Trust the NAD session + RADIUS accept/accounting-ack as
   ground truth; check logging categories / patch level if MnT stays empty.
+- **Dynamic authZ (dACL / dynamic VLAN):** `ise_create_dacl(name, dacl)` (IOS ACE
+  lines), `ise_create_authz_profile(name, vlan=…, dacl_name=…)`, then an authZ rule
+  referencing it. The switch shows the downloaded ACL as `ACS ACL: xACSACLx-…` and
+  moves the port to the assigned VLAN (verify `show access-session … details` +
+  `show ip access-lists`). Assigning a non-bridged VLAN isolates the endpoint, and
+  rapid re-auths on a single-host port can trip `security-violation` err-disable —
+  a lab artifact, not a real fault.
+- **TrustSec SGT + SGACL:** assign the SGT as a **rule result** (`security_group`),
+  not in the profile. SGACL body via `ise_create_sgacl` (`{'Sgacl':{name,aclcontent,
+  ipVersion:'IPV4'}}`); egress cell via ERS `/ers/config/egressmatrixcell`
+  (`{EgressMatrixCell:{sourceSgtId,destinationSgtId,matrixCellStatus:'ENABLED',
+  defaultRule:'NONE',sgacls:[id]}}`). Switch enforcement needs `cts role-based
+  enforcement` **and device-tracking on the port** (attach a `device-tracking
+  policy`) so the endpoint IP binds to its session SGT (`show cts role-based
+  sgt-map` → IP→SGT LOCAL); static-map the dest (`cts role-based sgt-map <ip> sgt
+  <n>`). Prove it with `show cts role-based counters` — **HW-Denied** increments;
+  the virtual cat9000v-uadp genuinely enforces in hardware.
+- **CoA:** the `dynamic-author` client must be in the **same VRF/table as the RADIUS
+  source** — after moving RADIUS to global Vlan100, move the CoA client too
+  (`client <ise-ip> server-key …`, no `vrf Mgmt-vrf`) or ISE's CoA is silently
+  dropped (ISE logs `11213 No response from NAD`). Trigger via MnT:
+  `ise_mnt_call('/CoA/Reauth/{node}/{mac}/{reauthType}')` — the last segment is a
+  **numeric** reauthType (1/2), NOT the NAS IP; `results:true` = ACKed. A CoA
+  re-applies policy in place with **no link bounce** (no LINK-3/LINEPROTO events).
+- **Full CTS (switch downloads SGACL policy from ISE):** set the NAD's
+  `trustsecsettings.deviceAuthenticationSettings` (sgaDeviceId + sgaDevicePassword)
+  — ISE's ERS schema **misspells** the notification fields
+  (`downlaodEnvironmentDataEveryXSeconds`, `downlaodPeerAuthorization…`). On the
+  switch: `aaa authorization network CTS-LIST group radius` + `cts authorization
+  list CTS-LIST` + `cts credentials id <id> password <pw>` (exec, must match the
+  NAD) + `cts refresh environment-data` + `cts refresh policy`. Verify with
+  `show cts environment-data` (SGT name table + server ALIVE) and `show cts rbacl
+  <name>` (a downloaded `-00` generation with the ACEs present).
 
 ## Reporting
 

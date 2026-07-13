@@ -34,6 +34,7 @@ _TOOL_MODULES = (
     "interfaces",
     "links",
     "annotations",
+    "labspec",
     "definitions",
     "users_groups",
     "system",

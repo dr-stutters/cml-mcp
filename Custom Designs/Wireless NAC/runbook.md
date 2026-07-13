@@ -66,6 +66,11 @@ WLAN/SSID `nac-corp`.
 
 ## Stage 0 — Wireless NAC lab (topology)  → cml-lab-architect
 
+**Topology-as-code:** [`topology.yaml`](topology.yaml) in this folder is the
+validated spec — one `build_lab_from_spec` call rebuilds the whole lab (with the
+corrected C9800 day-0 already baked in, so Stage 1 becomes a verification). The
+prose below describes the same build:
+
 Build a lab "Wireless NAC" on the `198.18.128.0/18` underlay:
 
 - **WLC-1** (`cat9800`, 6 GB / 2 vCPU) — day-0 `iosxe_config.txt`: hostname,

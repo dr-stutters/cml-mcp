@@ -93,7 +93,11 @@ Protocol for lab requests involving these device families:
 1. Send the requirements to **cml-lab-architect**. It builds the topology and
    returns a lab_id plus one brief per device group. For Firepower labs the
    architect must decide the FTD management mode up front (day-0
-   `ManageLocally` / `FmcIp`) - ask the user if it isn't stated.
+   `ManageLocally` / `FmcIp`) - ask the user if it isn't stated. For
+   multi-node builds it prefers **topology-as-code**: a declarative YAML lab
+   spec + one `build_lab_from_spec` call (specs are committed at
+   `Custom Designs/<Design>/topology.yaml`; `export_lab_spec` captures an
+   existing lab the same way).
 2. Fan each brief out to the matching specialist (**catalyst-engineer**,
    **firewall-engineer**, **ise-engineer**, **windows-engineer**,
    **splunk-engineer**, **wireless-engineer**), passing the brief verbatim. Parallel

@@ -1,0 +1,197 @@
+# Wireless NAC lab - declarative topology spec (topology-as-code).
+# Rebuild with ONE call:  build_lab_from_spec(spec=<this file>)   (cml MCP)
+# Validate first with:    validate_lab_spec / build_lab_from_spec(dry_run=True)
+#
+# Exported from the live, validated lab (092c1268) via export_lab_spec, then
+# hand-tuned: the C9800 day-0 below carries the FIXED mgmt plane (Vlan1 SVI +
+# default route - Gi1 is an L2 switchport and rejects `ip address`; see
+# runbook.md Gotchas), and the groups: section adds the delegation briefs.
+# Day-0 keeps the AP/client on the OPEN SSID from the validated build; the
+# runbook's Stage 5 rewrites them to WPA2-Enterprise live.
+version: 1
+lab:
+  title: Wireless NAC
+  description: Wireless 802.1X / NAC test bed against external ISE 3.5 (198.18.134.35) over the
+    System Bridge underlay. Cat9800-CL WLC (RESTCONF), Ubuntu wireless-ap (hostapd) +
+    wireless-client (wpa_supplicant) on a simulated-RF link. Topology + day-0 only; feature
+    config (RESTCONF objects, hostapd WPA2-Enterprise, wpa_supplicant, ISE) is done per the
+    runbook stages.
+nodes:
+  WLC-1:
+    definition: cat9800
+    x: 0
+    y: 200
+    config: |
+      platform console serial
+      hostname WLC-1
+      no ip domain-lookup
+      ip domain name lab.local
+      aaa new-model
+      aaa authentication login default local
+      aaa authorization exec default local
+      username admin privilege 15 secret Cisc0123#
+      interface Vlan1
+       ip address 198.18.128.70 255.255.192.0
+       no shutdown
+      interface GigabitEthernet1
+       no shutdown
+      ip route 0.0.0.0 0.0.0.0 198.18.128.1
+      ip http server
+      ip http secure-server
+      ip http authentication local
+      restconf
+      netconf-yang
+      wireless management interface Vlan1
+      line con 0
+       exec-timeout 0 0
+       logging synchronous
+      line vty 0 4
+       login local
+       transport input ssh
+      end
+  AP-1:
+    definition: wireless-ap
+    x: 200
+    y: 200
+    config_files:
+      - name: user-data
+        content: |
+          #cloud-config
+          hostname: AP-1
+          manage_etc_hosts: True
+          system_info:
+            default_user:
+              name: cisco
+          password: cisco
+          chpasswd:
+            expire: False
+          ssh_pwauth: True
+          write_files:
+            - path: /home/cisco/hostapd.conf
+              content: |
+                interface=wlan0
+                driver=nl80211
+                ssid=openap
+                channel=6
+                auth_algs=1
+                wpa=0
+                beacon_int=1000
+              owner: cisco:cisco
+              permissions: '0644'
+      - name: network-config
+        content: |
+          #network-config
+          network:
+            version: 2
+            renderer: networkd
+            ethernets:
+              ens2:
+                dhcp4: false
+                dhcp6: false
+            bridges:
+              br0:
+                interfaces: [ens2]
+                dhcp4: false
+                dhcp6: false
+                addresses: [198.18.128.71/18]
+                routes:
+                  - to: default
+                    via: 198.18.128.1
+                nameservers:
+                  addresses: [198.18.128.1, 8.8.8.8]
+                parameters:
+                  stp: false
+  CLIENT-1:
+    definition: wireless-client
+    x: 200
+    y: 400
+    config_files:
+      - name: user-data
+        content: |
+          #cloud-config
+          hostname: CLIENT-1
+          manage_etc_hosts: True
+          system_info:
+            default_user:
+              name: cisco
+          password: cisco
+          chpasswd:
+            expire: False
+          ssh_pwauth: True
+          write_files:
+            - path: /home/cisco/wpa_supplicant.conf
+              content: |
+                ctrl_interface=/var/run/wpa_supplicant
+                network={
+                    ssid="openap"
+                    key_mgmt=NONE
+                }
+              owner: cisco:cisco
+              permissions: '0644'
+      - name: network-config
+        content: |
+          #network-config
+          network:
+            version: 2
+            ethernets:
+              ens2:
+                dhcp4: true
+                optional: true
+  WLC-EXT:
+    definition: external_connector
+    config: System Bridge
+    x: 0
+    y: 0
+  AP-EXT:
+    definition: external_connector
+    config: System Bridge
+    x: 400
+    y: 200
+links:
+  # No drawn link for the RF path: AP-1 wlan0 <-> CLIENT-1 wlan0 ride the
+  # shared airduct/mac80211_hwsim medium (implicit in CML wireless).
+  - WLC-1:GigabitEthernet1 -- WLC-EXT:port
+  - AP-1:ens2 -- AP-EXT:port
+annotations:
+  - {type: rectangle, border_color: '#2563ebcc', color: '#2563eb18', thickness: 2,
+     x1: -70, y1: -110, x2: 150, y2: 300}
+  - {type: rectangle, border_color: '#16a34acc', color: '#16a34a18', thickness: 2,
+     x1: 120, y1: 80, x2: 540, y2: 500}
+  - type: text
+    color: '#1e3a8aff'
+    text_bold: true
+    text_size: 14
+    x1: -400
+    text_content: |-
+      Path 1 - WLC / RESTCONF
+      Cat9800-CL WLC-1  198.18.128.70
+      HTTPS RESTCONF (admin)
+  - type: text
+    color: '#14532dff'
+    text_bold: true
+    text_size: 13
+    x1: 400
+    y1: -40
+    text_content: |-
+      Path 2 - Over-the-air 802.1X
+      AP-1 (hostapd) <-RF-> CLIENT-1 (wpa_supplicant)
+      SSID openap ch6  |  RF via airduct host-relay (virtio), NOT a drawn link
+      AP-1 br0 (ens2+wlan0) 198.18.128.71 -> System Bridge -> underlay
+  - {type: text, color: '#334155ff', text_italic: true, x1: 80, y1: 600,
+     text_content: 'System Bridge = 198.18.128.0/18 underlay  ->  external ISE 3.5 @ 198.18.134.35'}
+groups:
+  wireless:
+    agent: wireless-engineer
+    nodes: [WLC-1, AP-1, CLIENT-1]
+    addressing: |
+      WLC-1 Vlan1 198.18.128.70/18 (mgmt, RESTCONF admin/Cisc0123#), default route via 198.18.128.1
+      AP-1 br0 (ens2+wlan0) 198.18.128.71/18; CLIENT-1 DHCP over wlan0
+      ISE 3.5 = 198.18.134.35 (external, on the underlay)
+    tasks: |
+      Follow Custom Designs/Wireless NAC/runbook.md stages 1-5: confirm RESTCONF up
+      (wlc_check), onboard WLC-1 + AP-1 as ISE NADs, program RADIUS->ISE + the
+      nac-corp WPA2-Enterprise WLAN via the wlc MCP, then rewrite hostapd/wpa_supplicant
+      to WPA2-Enterprise (PEAP-MSCHAPv2, wifiuser) and associate.
+    acceptance: |
+      Path 1: test aaa group ISE-GROUP wifiuser <pw> new-code -> "User successfully authenticated".
+      Path 2: wpa_cli status = COMPLETED; hostapd log shows Access-Accept; ISE MnT shows the session.

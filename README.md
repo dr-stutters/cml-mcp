@@ -345,6 +345,43 @@ provisioned over the REST API, iBGP AS 65070 overlay, LAN-to-LAN reachability).
 
 ## Tool reference
 
+### Topology-as-code
+
+| Tool | Description |
+|---|---|
+| `validate_lab_spec` | Validate a declarative YAML lab spec (offline schema + live definition names) |
+| `build_lab_from_spec` | Compile a spec into a complete lab in one call (nodes, links, annotations, briefs) |
+| `export_lab_spec` | Reverse-compile a live lab into the concise spec YAML (for version control) |
+
+A **lab spec** is a concise YAML document describing a whole topology — the
+declarative alternative to calling `create_lab`/`add_node`/`create_link`
+individually (keep those for incremental edits). Specs live next to their
+design docs, e.g.
+[`Custom Designs/Wireless NAC/topology.yaml`](Custom%20Designs/Wireless%20NAC/topology.yaml):
+
+```yaml
+version: 1
+lab: {title: My Lab}
+defaults: {definition: iol-xe}          # merged under every node
+nodes:                                  # label -> node ({} ok with defaults)
+  R1: {config: "hostname R1"}           # day-0: config (text) | config_json
+  R2: {x: 180, y: 0}                    #   (ftdv/fmcv JSON) | config_files
+  EXT: {definition: external_connector, config: System Bridge}
+links:
+  - R1:Ethernet0/1 -- R2:e0/1           # pinned (IOS abbreviations resolve)
+  - R1 -- EXT                           # auto: next free interface
+groups:                                 # optional -> per-specialist briefs
+  core: {agent: catalyst-engineer, nodes: [R1, R2], tasks: "..."}
+```
+
+Link grammar: `A[:iface] -- B[:iface]` (whitespace around `--`); interface
+labels accept IOS-style abbreviations (`Gi0/1`), matched never guessed —
+ambiguity is an error. Nothing is created unless the whole spec validates
+(`dry_run=true` previews; `rollback_on_error=true` deletes a failed partial
+build). The build report includes one delegation brief per `groups:` entry,
+ready to fan out to the specialist agents. Not covered in v1: diff/apply
+reconciliation against an existing lab, and link conditioning.
+
 ### Labs
 
 | Tool | Description |
@@ -474,12 +511,22 @@ of the server works without it.
 
 ## Testing
 
-Three test suites run against a live CML server (all create scratch labs and
+An offline unit suite (no CML needed — mocked HTTP) runs with plain pytest and
+in CI:
+
+```bash
+uv run pytest
+```
+
+Four live suites run against a real CML server (all create scratch labs and
 clean up after themselves):
 
 ```bash
 # API tool coverage over the real MCP stdio layer (fast, ~30 s)
 uv run python tests/smoke_test.py
+
+# Topology-as-code: spec -> build -> export -> rebuild round trip (~30 s)
+uv run python tests/labspec_e2e_test.py
 
 # Boots a real IOSv node and drives its console via pyATS (~5 min)
 uv run python tests/pyats_e2e_test.py
@@ -500,7 +547,10 @@ src/cml_mcp/
   screenshots.py    # headless-browser capture (optional 'browser' extra)
   tools/            # tool modules, one per functional area
 tests/
+  test_client_unit.py   # offline unit tests (mocked HTTP; runs in CI)
+  test_labspec_unit.py  # offline topology-as-code tests (parser, matcher, build)
   smoke_test.py         # end-to-end API tool checks
+  labspec_e2e_test.py   # spec -> build -> export -> rebuild round trip
   pyats_e2e_test.py     # console interaction against a booted node
   firepower_e2e_test.py # FTD local + FMC-managed mode validation (heavy)
 .claude/agents/     # specialist agents (architect, catalyst, firewall)
@@ -550,8 +600,8 @@ Hard-won lessons, encoded in the specialist agents and worth knowing:
 
 ## Roadmap
 
-- Composite workflow helpers (`build_lab_from_spec`, `wait_for_converged`,
-  `lab_health_summary`) to cut agent round-trips on large topologies.
+- Composite workflow helpers (`wait_for_converged`, `lab_health_summary`) to
+  cut agent round-trips on large topologies.
+- Topology-as-code v2: diff/apply reconciliation of a live lab against its spec.
 - MCP resources/prompts (topology templates, guided lab designs).
-- Hardening: offline pytest suite with mocked API, authenticated HTTP
-  transport for shared deployments.
+- Hardening: authenticated HTTP transport for shared deployments.

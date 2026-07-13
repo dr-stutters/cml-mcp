@@ -44,6 +44,19 @@ building anything large.
 
 ## Building
 
+**Prefer topology-as-code for multi-node builds (≥4 nodes).** Author a
+declarative YAML lab spec — nodes with day-0 configs, links (pin interfaces
+inline: `FTD-1:Management0/0 -- MGMT-SW`), annotations, and a `groups:`
+section carrying your delegation-brief content — then make ONE
+`build_lab_from_spec` call. Validate first (`validate_lab_spec` or
+`dry_run=true`); nothing is created unless the whole spec passes. The build
+report returns resolved links, warnings, and a ready-made brief per group —
+use its `briefs` array as your delegation output. If a lab is worth keeping,
+save its spec as `Custom Designs/<Design>/topology.yaml` (see the Wireless
+NAC exemplar) so it can be rebuilt in one call; `export_lab_spec` captures an
+existing lab the same way. Use the granular tools below for small labs and
+for incremental edits to existing labs.
+
 1. `create_lab` with a descriptive title and a description recording the
    lab's purpose.
 2. `add_node` for every device. Set `x`,`y` on a grid, 150-200 px spacing
@@ -73,9 +86,10 @@ building anything large.
    an `unmanaged_switch` connecting each FTD's **`Management0/0`** (never
    `donotuse1`; data ports are `GigabitEthernet0/0+`), the FMC's `eth0`, and
    a `net-tools` toolbox node the specialist uses to drive the FDM/FMC REST
-   APIs from inside the lab. Link firewall mgmt ports by EXPLICIT interface
-   id, not node id (auto-pick would grab Management0/0 for the first link but
-   guessing is not a plan).
+   APIs from inside the lab. Link firewall mgmt ports EXPLICITLY - in a spec,
+   pin the label in the link string (`FTD-1:Management0/0 -- MGMT-SW`); with
+   granular tools, use the interface id, not the node id (auto-pick would
+   grab Management0/0 for the first link but guessing is not a plan).
 4. `create_link` using node ids (free interfaces are picked automatically) -
    record which link connects which node pair.
 5. Optional `manage_annotations` to label zones/areas.

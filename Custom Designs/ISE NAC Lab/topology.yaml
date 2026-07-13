@@ -1,0 +1,346 @@
+# ISE NAC lab - declarative topology spec (topology-as-code).
+# Rebuild with ONE call:  build_lab_from_spec(spec=<this file>)   (cml MCP)
+# Validate first with:    validate_lab_spec / build_lab_from_spec(dry_run=True)
+#
+# Exported via export_lab_spec from the live, validated ISE35-MAB lab (cb53d7fe):
+# a cat9000v-uadp access switch (the NAD) + Alpine MAB endpoint + net-tools
+# wpa_supplicant node (PEAP/EAP-TLS), OOB mgmt and data legs bridged to the
+# 198.18.128.0/18 underlay. ISE 3.5 (198.18.134.35) and the Windows DC/CA are
+# EXTERNAL VMs - not in this spec; see runbook.md stages for their side.
+#
+# The switch day-0 below is the EXTRACTED RUNNING CONFIG of the validated build
+# (freshly re-extracted, test-aaa verified Access-Accept at capture time): MAB
+# policy-map, dot1x system-auth-control, and the critical runbook-Stage-2
+# pattern - RADIUS + CoA in the GLOBAL table via the Vlan100 SVI / Gi1/0/1
+# front-panel uplink (cat9000v cannot do NAC RADIUS from Mgmt-vrf; see runbook
+# Gotchas). Includes the cat9000v vswitch.xml platform file. A rebuilt switch
+# boots NAC-ready. For the ISE 3.4 variant, point the RADIUS server / CoA
+# client / ISE NAD entry at 198.18.134.30 instead.
+# Lab-specific values (adjust): OOB 198.18.128.62/18 (Mgmt-vrf, mgmt only),
+# Vlan100 SVI 198.18.128.66/18 (NAD source IP), RADIUS/CoA key ISEsecret123,
+# images cat9000v-uadp-17-18-02 / alpine-base-3-23-3.
+version: 1
+lab:
+  title: ISE35-MAB
+  description: MAB/dot1x NAD test against ISE 3.5 (198.18.134.35). Cat9000v-uadp access switch, Alpine
+    endpoint on Gi1/0/2, OOB mgmt (Gi0/0, Mgmt-vrf, 198.18.128.62/18) bridged to the real underlay. Mirror
+    of ISE34-MAB.
+defaults:
+  definition: external_connector
+nodes:
+  SW-ISE35:
+    definition: cat9000v-uadp
+    config_files:
+    - name: iosxe_config.txt
+      content: "Building configuration...\n\nCurrent configuration : 11256 bytes\n!\n! Last configuration\
+        \ change at 12:57:46 UTC Mon Jul 13 2026\n!\nversion 17.18\nservice timestamps debug datetime\
+        \ msec\nservice timestamps log datetime msec localtime show-timezone\n!\nhostname SW-ISE35\n!\n\
+        !\nvrf definition Mgmt-vrf\n !\n address-family ipv4\n exit-address-family\n !\n address-family\
+        \ ipv6\n exit-address-family\n!\nno logging console\naaa new-model\n!\n!\naaa group server radius\
+        \ ISE-GROUP\n server name ISE-PSN\n ip radius source-interface Vlan100\n!\naaa authentication\
+        \ dot1x default group ISE-GROUP\naaa authorization network default group ISE-GROUP \naaa authorization\
+        \ network CTS-LIST group radius \naaa accounting identity default start-stop group ISE-GROUP\n\
+        !\n!\naaa server radius dynamic-author\n client 198.18.134.35 server-key ISEsecret123\n auth-type\
+        \ any\n!\naaa session-id common\nswitch 1 provision c9kv-uadp-8p\n!\n!\n!\n!\n!\n!\n!\n!\n!\n\
+        !\n!\n!\nlogin on-success log\n!\n!\n!\n!\n!\n!\n!\n!\naccess-session mac-move deny\ndevice-tracking\
+        \ policy IPDT\n no protocol ndp\n tracking enable\n!\n!\ncrypto pki trustpoint TP-self-signed-2957430692\n\
+        \ enrollment selfsigned\n subject-name cn=IOS-Self-Signed-Certificate-2957430692\n revocation-check\
+        \ none\n rsakeypair TP-self-signed-2957430692\n hash sha512\n!\ncrypto pki trustpoint SLA-TrustPoint\n\
+        \ enrollment pkcs12\n revocation-check crl\n hash sha512\n!\n!\ncrypto pki certificate chain TP-self-signed-2957430692\n\
+        \ certificate self-signed 01\n  30820330 30820218 A0030201 02020101 300D0609 2A864886 F70D0101\
+        \ 0D050030 \n  31312F30 2D060355 04030C26 494F532D 53656C66 2D536967 6E65642D 43657274 \n  69666963\
+        \ 6174652D 32393537 34333036 3932301E 170D3236 30373132 32323231 \n  34385A17 0D333630 37313132\
+        \ 32323134 385A3031 312F302D 06035504 030C2649 \n  4F532D53 656C662D 5369676E 65642D43 65727469\
+        \ 66696361 74652D32 39353734 \n  33303639 32308201 22300D06 092A8648 86F70D01 01010500 0382010F\
+        \ 00308201 \n  0A028201 0100D81A 6B39ABE1 DCFA835F 804AE9E5 374E920B 4C84BA4D F79ED207 \n  E8E146F9\
+        \ 6758288C 21C987E4 1C6DFFEE 5D715163 0D1D41B2 857B8549 EB4535D1 \n  ED8961BB A349174A 115AD550\
+        \ CE5DC7FC 77C59168 54198862 7FF3EAD3 79315F83 \n  B87CCB02 6BF567BF 83C2F15B 2A4A6A38 7DDCBB90\
+        \ 368FA569 E192A71B C86380BA \n  33A3FA02 A9D0AFEB 424660F1 47222B50 8D8F13E9 03B63DC3 9085CFCA\
+        \ DB2C9AB1 \n  26EF81C0 BBD0CE57 1C4FD3E4 0CBAC52B F1F1D42E FC61EC9C FB176F2E 3C63BEAF \n  405909CE\
+        \ E92C558F 2D91F184 175C3102 980B16FF 1F6FEE26 DB0C8B81 AC3BD184 \n  2ACB0B9B D05D5112 2DF12EFC\
+        \ 462BFDB6 49C47180 761027E0 72961986 443A9E5A \n  92D11B2C 6A9F0203 010001A3 53305130 1D060355\
+        \ 1D0E0416 0414412B 723D1D86 \n  F9E42D7A 4392A8A1 CBB6B195 19F8301F 0603551D 23041830 16801441\
+        \ 2B723D1D \n  86F9E42D 7A4392A8 A1CBB6B1 9519F830 0F060355 1D130101 FF040530 030101FF \n  300D0609\
+        \ 2A864886 F70D0101 0D050003 82010100 804EFE4C 7C7F45B8 F5D51A29 \n  C5A2A094 F1CEB76C FEBFD17B\
+        \ 7F7ECAB7 05EC8096 15F30E44 2A61ED9B 46F8B205 \n  B3A6847D FE029BEF 5874BEBF 675DB13D 0159E81D\
+        \ 45CA9F74 CD7C93FC 9496A1C8 \n  7BCA2E1A 0BC6D4BC 0316AA8E 8BBDB60D 267C4B0F 7C4E94E6 30B8468C\
+        \ 6EEC847B \n  5D0F1415 A80D21A9 85408241 5DD2FE9F 7514F14F DB5DDF6A D3F9CA1F 187A385C \n  A93F0D46\
+        \ 6E975D72 CC1567D4 C5CA4F4C D59DEBC6 ED632A9C BF5A242B 89EA85C4 \n  2557EDAE 2273060E F4A215F1\
+        \ 07AFA416 A94DAE2E CC3AA826 0AC8F6EE DEF8734E \n  B11F862B 7D095E78 80430F44 0F702995 EF39FF55\
+        \ 503DD001 37B6F1A5 905F75F0 \n  E7E35424 5BEC7D39 E446BF02 1641F842 A3ED04F4\n  \tquit\ncrypto\
+        \ pki certificate chain SLA-TrustPoint\n certificate ca 01\n  30820321 30820209 A0030201 02020101\
+        \ 300D0609 2A864886 F70D0101 0B050030 \n  32310E30 0C060355 040A1305 43697363 6F312030 1E060355\
+        \ 04031317 43697363 \n  6F204C69 63656E73 696E6720 526F6F74 20434130 1E170D31 33303533 30313934\
+        \ \n  3834375A 170D3338 30353330 31393438 34375A30 32310E30 0C060355 040A1305 \n  43697363 6F312030\
+        \ 1E060355 04031317 43697363 6F204C69 63656E73 696E6720 \n  526F6F74 20434130 82012230 0D06092A\
+        \ 864886F7 0D010101 05000382 010F0030 \n  82010A02 82010100 A6BCBD96 131E05F7 145EA72C 2CD686E6\
+        \ 17222EA1 F1EFF64D \n  CBB4C798 212AA147 C655D8D7 9471380D 8711441E 1AAF071A 9CAE6388 8A38E520\
+        \ \n  1C394D78 462EF239 C659F715 B98C0A59 5BBB5CBD 0CFEBEA3 700A8BF7 D8F256EE \n  4AA4E80D DB6FD1C9\
+        \ 60B1FD18 FFC69C96 6FA68957 A2617DE7 104FDC5F EA2956AC \n  7390A3EB 2B5436AD C847A2C5 DAB553EB\
+        \ 69A9A535 58E9F3E3 C0BD23CF 58BD7188 \n  68E69491 20F320E7 948E71D7 AE3BCC84 F10684C7 4BC8E00F\
+        \ 539BA42B 42C68BB7 \n  C7479096 B4CB2D62 EA2F505D C7B062A4 6811D95B E8250FC4 5D5D5FB8 8F27D191\
+        \ \n  C55F0D76 61F9A4CD 3D992327 A8BB03BD 4E6D7069 7CBADF8B DF5F4368 95135E44 \n  DFC7C6CF 04DD7FD1\
+        \ 02030100 01A34230 40300E06 03551D0F 0101FF04 04030201 \n  06300F06 03551D13 0101FF04 05300301\
+        \ 01FF301D 0603551D 0E041604 1449DC85 \n  4B3D31E5 1B3E6A17 606AF333 3D3B4C73 E8300D06 092A8648\
+        \ 86F70D01 010B0500 \n  03820101 00507F24 D3932A66 86025D9F E838AE5C 6D4DF6B0 49631C78 240DA905\
+        \ \n  604EDCDE FF4FED2B 77FC460E CD636FDB DD44681E 3A5673AB 9093D3B1 6C9E3D8B \n  D98987BF E40CBD9E\
+        \ 1AECA0C2 2189BB5C 8FA85686 CD98B646 5575B146 8DFC66A8 \n  467A3DF4 4D565700 6ADF0F0D CF835015\
+        \ 3C04FF7C 21E878AC 11BA9CD2 55A9232C \n  7CA7B7E6 C1AF74F6 152E99B7 B1FCF9BB E973DE7F 5BDDEB86\
+        \ C71E3B49 1765308B \n  5FB0DA06 B92AFE7F 494E8A9E 07B85737 F3A58BE1 1A48A229 C37C1E69 39F08678\
+        \ \n  80DDCD16 D6BACECA EEBC7CF9 8428787B 35202CDC 60E4616A B623CDBD 230E3AFB \n  418616A9 4093E049\
+        \ 4D10AB75 27E86F73 932E35B5 8862FDAE 0275156F 719BB2F0 \n  D697DF7F 28\n  \tquit\n!\ncts authorization\
+        \ list CTS-LIST\n!\nlicense boot level network-advantage addon dna-advantage\nservice-template\
+        \ DEFAULT_LINKSEC_POLICY_MUST_SECURE\n linksec policy must-secure\nservice-template DEFAULT_LINKSEC_POLICY_SHOULD_SECURE\n\
+        \ linksec policy should-secure\nservice-template DEFAULT_CRITICAL_VOICE_TEMPLATE\n voice vlan\n\
+        service-template DEFAULT_CRITICAL_DATA_TEMPLATE\nservice-template webauth-global-inactive\n inactivity-timer\
+        \ 3600 \ndot1x system-auth-control\nmemory free low-watermark processor 73925\n!\ndiagnostic bootup\
+        \ level minimal\n!\nspanning-tree mode rapid-pvst\nspanning-tree extend system-id\n!\n!\n!\n!\n\
+        !\nredundancy\n mode sso\ncrypto engine compliance shield disable\n!\n!\n!\n!\n!\n!\nclass-map\
+        \ match-any system-cpp-police-ewlc-control\n description EWLC Control \nclass-map match-any system-cpp-police-topology-control\n\
+        \ description Topology control\nclass-map match-any system-cpp-police-sw-forward\n description\
+        \ Sw forwarding, L2 LVX data packets, LOGGING, Transit Traffic\nclass-map match-any system-cpp-default\n\
+        \ description EWLC Data, Inter FED Traffic \nclass-map match-any system-cpp-police-sys-data\n\
+        \ description Openflow, Exception, EGR Exception, NFL Sampled Data, RPF Failed\nclass-map match-any\
+        \ system-cpp-police-punt-webauth\n description Punt Webauth\nclass-map match-any system-cpp-police-l2lvx-control\n\
+        \ description L2 LVX control packets\nclass-map match-any system-cpp-police-forus\n description\
+        \ Forus traffic\nclass-map match-any system-cpp-police-multicast-end-station\n description MCAST\
+        \ END STATION\nclass-map match-any system-cpp-police-forus-addr-resolution\n description Forus\
+        \ address resolution\nclass-map match-any system-cpp-police-high-rate-app\n description High Rate\
+        \ Applications \nclass-map match-any system-cpp-police-multicast\n description MCAST Data\nclass-map\
+        \ match-any system-cpp-police-meraki-next-tunnel\n description Meraki Next tunnel\nclass-map match-any\
+        \ system-cpp-police-l2-control\n description L2 control\nclass-map match-any system-cpp-police-dot1x-auth\n\
+        \ description DOT1X Auth\nclass-map match-any system-cpp-police-data\n description ICMP redirect,\
+        \ ICMP_GEN and BROADCAST\nclass-map match-any system-cpp-police-stackwise-virt-control\n description\
+        \ Stackwise Virtual OOB\nclass-map match-any non-client-nrt-class\nclass-map match-any system-cpp-police-routing-control\n\
+        \ description Routing control and Low Latency\nclass-map match-any system-cpp-police-protocol-snooping\n\
+        \ description Protocol snooping\nclass-map match-any system-cpp-police-dhcp-snooping\n description\
+        \ DHCP snooping\nclass-map match-any system-cpp-police-ios-routing\n description L2 control, Topology\
+        \ control, Routing control, Low Latency\nclass-map match-any system-cpp-police-system-critical\n\
+        \ description System Critical and Gold Pkt\nclass-map match-any system-cpp-police-ios-feature\n\
+        \ description ICMPGEN,BROADCAST,ICMP,L2LVXCntrl,ProtoSnoop,PuntWebauth,MCASTData,Transit,DOT1XAuth,Swfwd,LOGGING,L2LVXData,ForusTraffic,ForusARP,McastEndStn,Openflow,Exception,EGRExcption,NflSampled,RpfFailed\n\
+        !\n!\npolicy-map type control subscriber DOT1X_MAB\n event session-started match-all\n  10 class\
+        \ always do-until-failure\n   10 authenticate using dot1x priority 10\n   20 authenticate using\
+        \ mab priority 20\n!\npolicy-map type control subscriber MAB_POLICY\n event session-started match-all\n\
+        \  10 class always do-until-failure\n   10 authenticate using mab priority 20\n!\npolicy-map system-cpp-policy\n\
+        !\n! \n!\n!\n!\n!\n!\n!\n!\n!\n!\n!\ninterface Loopback199\n description SPLUNK-SYSLOG-TEST\n\
+        \ no ip address\n!\ninterface GigabitEthernet0/0\n description OOB-MGMT to 198.18.128.0/18 - RADIUS\
+        \ to ISE 3.5 (198.18.134.35)\n vrf forwarding Mgmt-vrf\n ip address 198.18.128.62 255.255.192.0\n\
+        \ negotiation auto\n!\ninterface GigabitEthernet1/0/1\n switchport access vlan 100\n switchport\
+        \ mode access\n spanning-tree portfast\n!\ninterface GigabitEthernet1/0/2\n switchport mode access\n\
+        \ access-session host-mode single-host\n access-session port-control auto\n mab\n spanning-tree\
+        \ portfast\n service-policy type control subscriber MAB_POLICY\n!\ninterface GigabitEthernet1/0/3\n\
+        \ switchport access vlan 100\n switchport mode access\n device-tracking attach-policy IPDT\n access-session\
+        \ host-mode single-host\n access-session port-control auto\n mab\n dot1x pae authenticator\n spanning-tree\
+        \ portfast\n service-policy type control subscriber DOT1X_MAB\n!\ninterface GigabitEthernet1/0/4\n\
+        !\ninterface GigabitEthernet1/0/5\n!\ninterface GigabitEthernet1/0/6\n!\ninterface GigabitEthernet1/0/7\n\
+        !\ninterface GigabitEthernet1/0/8\n!\ninterface GigabitEthernet1/0/9\n!\ninterface GigabitEthernet1/0/10\n\
+        !\ninterface GigabitEthernet1/0/11\n!\ninterface GigabitEthernet1/0/12\n!\ninterface GigabitEthernet1/0/13\n\
+        !\ninterface GigabitEthernet1/0/14\n!\ninterface GigabitEthernet1/0/15\n!\ninterface GigabitEthernet1/0/16\n\
+        !\ninterface GigabitEthernet1/0/17\n!\ninterface GigabitEthernet1/0/18\n!\ninterface GigabitEthernet1/0/19\n\
+        !\ninterface GigabitEthernet1/0/20\n!\ninterface GigabitEthernet1/0/21\n!\ninterface GigabitEthernet1/0/22\n\
+        !\ninterface GigabitEthernet1/0/23\n!\ninterface GigabitEthernet1/0/24\n!\ninterface Vlan1\n no\
+        \ ip address\n shutdown\n!\ninterface Vlan100\n ip address 198.18.128.66 255.255.192.0\n!\nip\
+        \ forward-protocol nd\nip tcp mss 1280\nip tcp window-size 212000\nip http server\nip http authentication\
+        \ local\nip http secure-server\nip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 198.18.128.1\nip ssh bulk-mode\
+        \ 131072\n!\n!\n!\nip access-list role-based TS_DENY_ICMP\n 10 deny icmp\n 20 permit ip\nlogging\
+        \ source-interface Vlan100\nlogging host 198.18.128.51 transport udp port 5514\n!\nradius-server\
+        \ attribute 6 on-for-login-auth\nradius-server attribute 8 include-in-access-req\nradius-server\
+        \ attribute 25 access-request include\n!\nradius server ISE-PSN\n address ipv4 198.18.134.35 auth-port\
+        \ 1812 acct-port 1813\n key ISEsecret123\n!\n!\n!\ncontrol-plane\n service-policy input system-cpp-policy\n\
+        !\n!\ncts role-based sgt-map 198.18.128.1 sgt 11\ncts role-based enforcement\ncts role-based enforcement\
+        \ vlan-list 100\n!\nline con 0\n exec-timeout 0 0\n logging synchronous\n stopbits 1\nline vty\
+        \ 0 4\n exec-timeout 0 0\n transport input ssh\nline vty 5 15\n transport input ssh\n!\n!\n!\n\
+        !\n!\n!\n!\nend"
+    - name: conf/vswitch.xml
+      content: |-
+        <?xml version="1.0"?>
+        <!-- Copyright (c) 2020 by Cisco Systems, Inc.-->
+        <!-- All rights reserved. -->
+        <!-- Virtual Cat9k configuration information -->
+        <switch>
+        <!-- Virtual Board ID to indicate Q200 or UADP asic simulation -->
+          <board_id>20612</board_id>
+        <!-- Unique Serial# must be provided for each running instance -->
+          <prod_serial_number>CMLUADP</prod_serial_number>
+        <!-- Number of ports must appear before other port information -->
+          <port_count>24</port_count>
+          <port lpn="1">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="2">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="3">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="4">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="5">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="6">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="7">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="8">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="9">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="10">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="11">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="12">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="13">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="14">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="15">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="16">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="17">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="18">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="19">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="20">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="21">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="22">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="23">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="24">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+        </switch>
+    x: 300
+    y: 200
+    image: cat9000v-uadp-17-18-02
+  EP-ISE35:
+    definition: alpine
+    config: |
+      # this is a shell script which will be sourced at boot
+      hostname inserthostname-here
+      # configurable user account
+      USERNAME=cisco
+      PASSWORD=cisco
+    x: -40
+    y: 200
+    image: alpine-base-3-23-3
+  MGMT-EXT:
+    config: System Bridge
+    x: 450
+    y: 50
+  DATA-EXT:
+    config: System Bridge
+    x: 600
+    y: 200
+  SUP-ISE35:
+    definition: net-tools
+    config: |
+      # insert more commands here
+      # ip address add dev eth1 10.0.0.1/24
+      # ip link set dev eth1 up
+      #
+      # keep the next line to indicate that the machine is ready
+      echo "READY" >/dev/console
+      cat /etc/motd
+      exit 0
+    x: 150
+    y: 480
+links:
+- SW-ISE35:GigabitEthernet0/0 -- MGMT-EXT:port
+- SW-ISE35:GigabitEthernet1/0/2 -- EP-ISE35:eth0
+- SW-ISE35:GigabitEthernet1/0/1 -- DATA-EXT:port
+- SW-ISE35:GigabitEthernet1/0/3 -- SUP-ISE35:eth0
+
+groups:
+  nac:
+    agent: ise-engineer
+    nodes: [SW-ISE35, EP-ISE35, SUP-ISE35]
+    addressing: |
+      SW-ISE35 Gi0/0 (Mgmt-vrf, OOB mgmt only) 198.18.128.62/18; Vlan100 SVI
+      198.18.128.66/18 via Gi1/0/1 -> DATA-EXT (global-table RADIUS/CoA source);
+      Gi1/0/2 -> EP-ISE35 (MAB, single-host); Gi1/0/3 -> SUP-ISE35 (802.1X supplicant).
+      ISE 3.5 = 198.18.134.35 (external); RADIUS/CoA shared key ISEsecret123.
+    tasks: |
+      Switch day-0 already carries the validated NAD config - verify, don't rebuild.
+      Follow Custom Designs/ISE NAC Lab/runbook.md: ensure the switch is an ISE NAD
+      (source IP 198.18.128.66), then run the MAB / PEAP-MSCHAPv2 / EAP-TLS flows
+      (and the dACL/TrustSec/CoA/CTS modules as needed) from EP-ISE35 and SUP-ISE35.
+    acceptance: |
+      test aaa group ISE-GROUP <user> <pw> new-code -> Access-Accept.
+      MAB: EP-ISE35 MAC authenticated (show access-session int Gi1/0/2 det; ISE MnT session).
+      802.1X: SUP-ISE35 wpa_supplicant EAP-SUCCESS against AD identity; ISE Access-Accept.

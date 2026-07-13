@@ -84,6 +84,12 @@ Confirm a test AD user exists (e.g. `iseuser1`) for PEAP.
 
 ## Stage 2 — Switch base (the critical part)  → catalyst-engineer
 
+**Topology-as-code:** [`topology.yaml`](topology.yaml) in this folder is the spec
+exported from the validated ISE35-MAB lab — one `build_lab_from_spec` call rebuilds
+the CML side (switch + endpoints + connectors) with the switch's validated NAD
+config (this whole stage, incl. the Vlan100 global-table fix) already baked into
+day-0, turning stages 2-3 into verification. The manual build:
+
 The cat9000v's OOB **Mgmt-vrf** port (Gi0/0) **cannot** carry NAC RADIUS or CoA
 (see Gotchas). Give the switch a **front-panel, global-table** path to ISE:
 

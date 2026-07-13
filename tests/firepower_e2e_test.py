@@ -27,7 +27,6 @@ import re
 import sys
 import time
 
-import yaml
 
 from cml_mcp.client import CMLClient
 from cml_mcp.config import load_settings

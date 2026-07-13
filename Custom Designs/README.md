@@ -27,9 +27,24 @@ captures designs **we build and validate ourselves** in CML, written up as
 
 ## Index
 
+**Full lab designs**
+
 | Design | Runbook | Status | Related agents |
 |---|---|---|---|
 | [ISE NAC Lab](ISE%20NAC%20Lab/) | [runbook.md](ISE%20NAC%20Lab/runbook.md) + 4 modules | ✅ validated (ISE 3.4/3.5, cat9000v) | ise-engineer, catalyst-engineer, windows-engineer |
+
+**Reusable components** — building blocks the end-to-end
+[Firewall SD-WAN](../Cisco%20Validated%20Designs/Firewall%20SD-WAN/runbook.md) CVD
+stitches together (usable on their own in any FMC/FTD lab):
+
+| Component | Reuse | Agent |
+|---|---|---|
+| [FMC-Managed FTD Registration](FMC-Managed%20FTD%20Registration/runbook.md) | any FMC-managed FTD lab | firewall-engineer |
+| [Secure Firewall SD-WAN Auto-VPN](Secure%20Firewall%20SD-WAN%20Auto-VPN/runbook.md) | route-based SD-WAN overlay | firewall-engineer |
+| [FTD Dual-ISP ECMP + Failover](FTD%20Dual-ISP%20ECMP%20+%20Failover/runbook.md) | multi-transport WAN | firewall-engineer |
+| [FTD Overlay LAN Redistribution](FTD%20Overlay%20LAN%20Redistribution/runbook.md) | OSPF/EIGRP/eBGP → BGP overlay | firewall-engineer |
+| [FTD Dual-Hub Redundancy](FTD%20Dual-Hub%20Redundancy/runbook.md) | secondary hub / route reflectors | firewall-engineer |
+| [FTD HA Pair (FMC)](FTD%20HA%20Pair%20(FMC)/runbook.md) | active/standby FTD | firewall-engineer |
 
 ## How to add a design
 

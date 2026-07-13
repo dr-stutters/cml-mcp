@@ -3,6 +3,9 @@
 Distilled from *Cisco Secure Firewall Threat Defense SD-WAN Design and
 Deployment Guide* (Cisco Public, Sept 2025; based on **FMC 7.6 / FTD 7.6**).
 See [links.md](links.md). Agent-consumable reference for **firewall-engineer**.
+For the **repeatable, as-built** step-by-step (grounded in our CML build), see
+[runbook.md](runbook.md) and its reusable component runbooks in
+[`Custom Designs/`](../../Custom%20Designs/).
 
 This is **Secure Firewall Threat Defense's own SD-WAN**, driven entirely from
 **Secure Firewall Management Center (FMC)** on the FTDs — **not** Cisco

@@ -46,8 +46,20 @@ Objects (overnight run used the `TAC-`/`tac-` prefix):
     "profile": "TAC_Shell_Priv15"}
    ```
    `commands` = list of command-set names; `profile` = one shell-profile name; the
-   rule condition is **mandatory** (no catch-all). Overnight rules:
+   rule condition is **mandatory** (no catch-all). Rules:
    `TAC-Admins` → NetAdmin + Priv15; `TAC-ReadOnly` → ReadOnly + Priv1.
+
+   **Differentiate users by identity group — not `Device Type`.** If every rule
+   conditions on `DEVICE:Device Type = All Device Types`, the rank-0 rule matches
+   *every* user (both get whatever the first rule grants). Put each user in an
+   identity group (`TAC_Admins`, `TAC_Operators`) and condition each rule on it:
+   ```json
+   {"conditionType": "ConditionAttributes", "dictionaryName": "IdentityGroup",
+    "attributeName": "Name", "operator": "equals",
+    "attributeValue": "User Identity Groups:TAC_Admins"}
+   ```
+   (Updating an internal user's group via ERS: GET the user, **drop the masked
+   `password` field** — `*******` is rejected on PUT — set `identityGroups`, PUT.)
 
 ## Stage 2 — NAD config (catalyst/ise-engineer, pyATS)
 
@@ -76,13 +88,20 @@ line vty 0 4
 Keep `local` in the method lists and leave the **console** line untouched — a
 recoverable fallback if ISE is unreachable.
 
-## Verification
+## Verification (proven live, ISE 3.5)
 
 - On the NAD: `test aaa group ISE-TAC tac-admin <pw> new-code` → **User successfully
-  authenticated**; `show tacacs` shows packets sent/received climbing.
-- Real login: `ssh tac-admin@198.18.128.68` → `show privilege` = 15; `ssh
-  tac-oper@…` → a permitted `show ...` works but `configure terminal` → **Command
-  authorization failed**.
+  authenticated** (both users); `show tacacs` → packets sent/received climbing,
+  Server Alive.
+- Real login (`ssh <user>@198.18.128.68`):
+  - **tac-admin** → `show privilege` = **15**; `show running-config` runs (NetAdmin
+    permit-all; debug shows `cmd=show` → `PASS_ADD`).
+  - **tac-oper** → `show privilege` = **1**; `show clock` runs (ReadOnly permits
+    show); `configure terminal` is blocked (priv-1 shell profile).
+- The AAA debug (`debug aaa authorization` + `debug tacacs`) shows ISE returning
+  `service=shell priv-lvl=N` on exec authorization and a per-command `AUTHOR/CMD`
+  `PASS_ADD`/`FAIL` for each command — ISE drives both the privilege and per-command
+  authorization.
 - ISE side: no TACACS MnT tool exists; use the **GUI** Device-Admin livelog
   (Operations ▸ TACACS ▸ Live Logs).
 

@@ -123,7 +123,13 @@ separate ISE persona from RADIUS NAC. Config-plane build order:
    `ise_create_authz_rule_raw(policy_id, body, kind="device-admin")`. The rule result
    is `commands` (list of command-set names) + `profile` (a shell-profile name), and
    **each rule REQUIRES a condition** (no catch-all). `DEVICE:Device IP Address` is
-   illegal for this scope — condition on `DEVICE:Device Type` (or an NDG) instead.
+   illegal for this scope. **Differentiate users by identity group**, not device
+   attributes: put each user in an identity group and condition each rule on
+   `IdentityGroup:Name equals "User Identity Groups:<group>"` — conditioning on
+   `DEVICE:Device Type` makes the rank-0 rule match *every* user. (Moving a user's
+   group via ERS: GET, drop the masked `password` (`*******` is rejected on PUT), set
+   `identityGroups`, PUT.) Validated live end-to-end: admin → priv-15 full access,
+   operator → priv-1 with `show` permitted and `configure` blocked.
 
 NAD side (pyATS): `tacacs server <n> / address ipv4 <ISE> / key <secret>`,
 `aaa group server tacacs+`, `aaa authentication login`, `aaa authorization

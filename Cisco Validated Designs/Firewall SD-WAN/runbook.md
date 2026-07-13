@@ -55,6 +55,10 @@ NNJ `10.200/16`, PRI `10.71`, WMA `10.72`, NCT `10.73`, MCT `10.74`; overlay loo
 
 1. Build the lab: FMCv + one FTDv per site, each dual-homed **Gi0/0→ISP1, Gi0/1→ISP2,
    Gi0/2→inside**; ISP transports as IOL routers on shared switches; mgmt bridged.
+   **Topology-as-code:** [`topology.yaml`](topology.yaml) in this folder is the spec
+   exported from the validated lab — one `build_lab_from_spec` call rebuilds the full
+   25-node end-state topology (incl. the Stage-5 dual-hub + HA nodes), with FTD day-0
+   FMC registration and the validated ISP/LAN router configs baked in.
 2. **Register each FTDv** → see component **[FMC-Managed FTD Registration](../../Custom%20Designs/FMC-Managed%20FTD%20Registration/runbook.md)**
    (device day-0 `FmcIp`+`FmcRegKey` **and** FMC `POST /devices/devicerecords`; eval
    license → export-control). Create an access policy (e.g. `SDWAN-AC`).

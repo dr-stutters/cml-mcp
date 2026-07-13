@@ -1,0 +1,345 @@
+# Firewall SD-WAN CVD lab - declarative topology spec (topology-as-code).
+# Rebuild with ONE call:  build_lab_from_spec(spec=<this file>)   (cml MCP)
+# Validate first with:    validate_lab_spec / build_lab_from_spec(dry_run=True)
+#
+# Exported via export_lab_spec from the live, validated lab (a7377830,
+# 'firewall-sdwan-cvd'): 6-site Secure Firewall SD-WAN - NYC hub (+ NYC HA pair
+# and secondary hub NNJ), dual ISP underlay (ECMP), per-site branch LANs
+# (OSPF / EIGRP / eBGP redistribution). The ISP/LAN routers' day-0 below IS the
+# validated end-state config (they come up ready); the FTD/FMC side boots with
+# day-0 JSON only - the SD-WAN overlay (auto-VPN, ECMP, PBR, HA) is applied via
+# the FMC REST API per runbook.md / design-brief.md in this folder.
+#
+# NOTE: FTD day-0 mgmt IPs (.23-.26, .31-.34), FMC .11, and the RegKey are
+# lab-specific - adjust for your environment.
+version: 1
+lab:
+  title: firewall-sdwan-cvd
+  description: 'Firewall SD-WAN CVD validation: DIA/PBR/path-monitoring/ECMP'
+defaults:
+  definition: unmanaged_switch
+nodes:
+  MGMT-EXT:
+    definition: external_connector
+    config: System Bridge
+    x: -280
+    y: -200
+  MGMT-SW:
+    config: 'mode: Bridge'
+    x: -160
+    y: -200
+  FMC1:
+    definition: fmcv
+    config: '{"EULA": "accept", "Hostname": "fmc1", "AdminPassword": "Cisc01@3", "DNS1": "198.18.128.1",
+      "DNS2": "", "IPv4Mode": "manual", "IPv4Addr": "198.18.128.11", "IPv4Mask": "255.255.192.0", "IPv4Gw":
+      "198.18.128.1", "IPv6Mode": "disabled", "IPv6Addr": "", "IPv6Mask": "", "IPv6Gw": ""}'
+    x: -160
+    y: -120
+  ISP1-SW:
+    config: 'mode: Bridge'
+    x: 80
+    y: 200
+  ISP2-SW:
+    config: 'mode: Bridge'
+    x: 760
+    y: 200
+  ISP1-RTR:
+    definition: iol-xe
+    config: |
+      hostname ISP1
+      no ip domain-lookup
+      interface Ethernet0/0
+       ip address 172.16.1.254 255.255.255.0
+       no shutdown
+      line con 0
+       exec-timeout 0 0
+       logging synchronous
+      end
+    x: -160
+    y: 200
+  ISP2-RTR:
+    definition: iol-xe
+    config: |
+      hostname ISP2
+      no ip domain-lookup
+      interface Ethernet0/0
+       ip address 172.16.2.254 255.255.255.0
+       no shutdown
+      line con 0
+       exec-timeout 0 0
+       logging synchronous
+      end
+    x: 1000
+    y: 120
+  PRI-FW:
+    definition: ftdv
+    config: '{"EULA": "accept", "Hostname": "pri-fw", "AdminPassword": "Cisc01@3", "FirewallMode": "routed",
+      "DNS1": "198.18.128.1", "DNS2": "", "DNS3": "", "IPv4Mode": "manual", "IPv4Addr": "198.18.128.23",
+      "IPv4Mask": "255.255.192.0", "IPv4Gw": "198.18.128.1", "IPv6Mode": "disabled", "IPv6Addr": "", "IPv6Mask":
+      "", "IPv6Gw": "", "FmcIp": "198.18.128.11", "FmcRegKey": "cisco123key", "FmcNatId": "", "ManageLocally":
+      "No"}'
+    x: 80
+    y: 400
+  WMA-FW:
+    definition: ftdv
+    config: '{"EULA": "accept", "Hostname": "wma-fw", "AdminPassword": "Cisc01@3", "FirewallMode": "routed",
+      "DNS1": "198.18.128.1", "DNS2": "", "DNS3": "", "IPv4Mode": "manual", "IPv4Addr": "198.18.128.24",
+      "IPv4Mask": "255.255.192.0", "IPv4Gw": "198.18.128.1", "IPv6Mode": "disabled", "IPv6Addr": "", "IPv6Mask":
+      "", "IPv6Gw": "", "FmcIp": "198.18.128.11", "FmcRegKey": "cisco123key", "FmcNatId": "", "ManageLocally":
+      "No"}'
+    x: 280
+    y: 400
+  NCT-FW:
+    definition: ftdv
+    config: '{"EULA": "accept", "Hostname": "nct-fw", "AdminPassword": "Cisc01@3", "FirewallMode": "routed",
+      "DNS1": "198.18.128.1", "DNS2": "", "DNS3": "", "IPv4Mode": "manual", "IPv4Addr": "198.18.128.25",
+      "IPv4Mask": "255.255.192.0", "IPv4Gw": "198.18.128.1", "IPv6Mode": "disabled", "IPv6Addr": "", "IPv6Mask":
+      "", "IPv6Gw": "", "FmcIp": "198.18.128.11", "FmcRegKey": "cisco123key", "FmcNatId": "", "ManageLocally":
+      "No"}'
+    x: 560
+    y: 400
+  MCT-FW:
+    definition: ftdv
+    config: '{"EULA": "accept", "Hostname": "mct-fw", "AdminPassword": "Cisc01@3", "FirewallMode": "routed",
+      "DNS1": "198.18.128.1", "DNS2": "", "DNS3": "", "IPv4Mode": "manual", "IPv4Addr": "198.18.128.26",
+      "IPv4Mask": "255.255.192.0", "IPv4Gw": "198.18.128.1", "IPv6Mode": "disabled", "IPv6Addr": "", "IPv6Mask":
+      "", "IPv6Gw": "", "FmcIp": "198.18.128.11", "FmcRegKey": "cisco123key", "FmcNatId": "", "ManageLocally":
+      "No"}'
+    x: 760
+    y: 400
+  NYC-HOST:
+    definition: net-tools
+    config: |
+      # insert more commands here
+      # ip address add dev eth1 10.0.0.1/24
+      # ip link set dev eth1 up
+      #
+      # keep the next line to indicate that the machine is ready
+      echo "READY" >/dev/console
+      cat /etc/motd
+      exit 0
+    x: 160
+    y: -360
+  WMA-HOST:
+    definition: net-tools
+    config: |
+      # insert more commands here
+      # ip address add dev eth1 10.0.0.1/24
+      # ip link set dev eth1 up
+      #
+      # keep the next line to indicate that the machine is ready
+      echo "READY" >/dev/console
+      cat /etc/motd
+      exit 0
+    x: 280
+    y: 560
+  PRI-LAN:
+    definition: iol-xe
+    config: |-
+      hostname PRI-LAN
+      !
+      interface Loopback0
+       ip address 10.71.100.1 255.255.255.0
+       ip ospf network point-to-point
+      !
+      interface Loopback1
+       ip address 10.71.101.1 255.255.255.0
+       ip ospf network point-to-point
+      !
+      interface Ethernet0/0
+       ip address 10.71.0.2 255.255.255.0
+       no shutdown
+      !
+      router ospf 1
+       router-id 10.71.0.2
+       network 10.71.0.0 0.0.0.255 area 0
+       network 10.71.100.0 0.0.0.255 area 0
+       network 10.71.101.0 0.0.0.255 area 0
+      !
+      end
+    x: 80
+    y: 560
+  NCT-LAN:
+    definition: iol-xe
+    config: |-
+      hostname NCT-LAN
+      !
+      interface Loopback0
+       ip address 10.73.100.1 255.255.255.0
+      !
+      interface Loopback1
+       ip address 10.73.101.1 255.255.255.0
+      !
+      interface Ethernet0/0
+       ip address 10.73.0.2 255.255.255.0
+       no shutdown
+      !
+      router eigrp 100
+       no auto-summary
+       network 10.73.0.0 0.0.0.255
+       network 10.73.100.0 0.0.0.255
+       network 10.73.101.0 0.0.0.255
+      !
+      ip route 0.0.0.0 0.0.0.0 10.73.0.1
+      !
+      end
+    x: 560
+    y: 560
+  MCT-LAN:
+    definition: iol-xe
+    config: |-
+      hostname MCT-LAN
+      !
+      interface Loopback0
+       ip address 10.74.100.1 255.255.255.0
+      !
+      interface Loopback1
+       ip address 10.74.101.1 255.255.255.0
+      !
+      interface Ethernet0/0
+       ip address 10.74.0.2 255.255.255.0
+       no shutdown
+      !
+      route-map SET-COMM-OUT permit 10
+       set community 1000
+      !
+      router bgp 65100
+       bgp log-neighbor-changes
+       network 10.74.100.0 mask 255.255.255.0
+       network 10.74.101.0 mask 255.255.255.0
+       neighbor 10.74.0.1 remote-as 65070
+       neighbor 10.74.0.1 send-community
+       neighbor 10.74.0.1 route-map SET-COMM-OUT out
+      !
+      end
+    x: 760
+    y: 560
+  NYC-FW-2:
+    definition: ftdv
+    config: '{"EULA": "accept", "Hostname": "nyc-fw-2", "AdminPassword": "Cisc01@3", "FirewallMode": "routed",
+      "DNS1": "198.18.128.1", "DNS2": "", "DNS3": "", "IPv4Mode": "manual", "IPv4Addr": "198.18.128.31",
+      "IPv4Mask": "255.255.192.0", "IPv4Gw": "198.18.128.1", "IPv6Mode": "disabled", "IPv6Addr": "", "IPv6Mask":
+      "", "IPv6Gw": "", "FmcIp": "198.18.128.11", "FmcRegKey": "cisco123key", "FmcNatId": "", "ManageLocally":
+      "No"}'
+    x: 80
+    y: -80
+  NNJ-FW-2:
+    definition: ftdv
+    config: '{"EULA": "accept", "Hostname": "nnj-fw-2", "AdminPassword": "Cisc01@3", "FirewallMode": "routed",
+      "DNS1": "198.18.128.1", "DNS2": "", "DNS3": "", "IPv4Mode": "manual", "IPv4Addr": "198.18.128.32",
+      "IPv4Mask": "255.255.192.0", "IPv4Gw": "198.18.128.1", "IPv6Mode": "disabled", "IPv6Addr": "", "IPv6Mask":
+      "", "IPv6Gw": "", "FmcIp": "198.18.128.11", "FmcRegKey": "cisco123key", "FmcNatId": "", "ManageLocally":
+      "No"}'
+    x: 840
+    y: -200
+  NYC-INSIDE-SW:
+    config: 'mode: Bridge'
+    x: 160
+    y: -200
+  NNJ-INSIDE-SW:
+    config: 'mode: Bridge'
+    x: 760
+    y: -360
+  MGMT-SW-2:
+    config: 'mode: Bridge'
+    x: -160
+    y: -320
+  NYC-FW-3:
+    definition: ftdv
+    config: '{"EULA": "accept", "Hostname": "nyc-fw-3", "AdminPassword": "Cisc01@3", "FirewallMode": "routed",
+      "DNS1": "198.18.128.1", "DNS2": "", "DNS3": "", "IPv4Mode": "manual", "IPv4Addr": "198.18.128.33",
+      "IPv4Mask": "255.255.192.0", "IPv4Gw": "198.18.128.1", "IPv6Mode": "disabled", "IPv6Addr": "", "IPv6Mask":
+      "", "IPv6Gw": "", "FmcIp": "198.18.128.11", "FmcRegKey": "cisco123key", "FmcNatId": "", "ManageLocally":
+      "No"}'
+    x: 240
+    y: -80
+  ISP1-SW-B:
+    config: 'mode: Bridge'
+    x: 440
+    y: 120
+  ISP2-SW-B:
+    config: 'mode: Bridge'
+    x: 760
+    y: -40
+  NNJ-FW-3:
+    definition: ftdv
+    config: '{"EULA": "accept", "Hostname": "nnj-fw-3", "AdminPassword": "Cisc01@3", "FirewallMode": "routed",
+      "DNS1": "198.18.128.1", "DNS2": "", "DNS3": "", "IPv4Mode": "manual", "IPv4Addr": "198.18.128.34",
+      "IPv4Mask": "255.255.192.0", "IPv4Gw": "198.18.128.1", "IPv6Mode": "disabled", "IPv6Addr": "", "IPv6Mask":
+      "", "IPv6Gw": "", "FmcIp": "198.18.128.11", "FmcRegKey": "cisco123key", "FmcNatId": "", "ManageLocally":
+      "No"}'
+    x: 680
+    y: -200
+links:
+- MGMT-EXT:port -- MGMT-SW:port0
+- FMC1:eth0 -- MGMT-SW:port1
+- ISP1-RTR:Ethernet0/0 -- ISP1-SW:port0
+- ISP2-RTR:Ethernet0/0 -- ISP2-SW:port0
+- PRI-FW:Management0/0 -- MGMT-SW:port4
+- PRI-FW:GigabitEthernet0/0 -- ISP1-SW:port3
+- PRI-FW:GigabitEthernet0/1 -- ISP2-SW:port3
+- WMA-FW:Management0/0 -- MGMT-SW:port5
+- WMA-FW:GigabitEthernet0/0 -- ISP1-SW:port4
+- WMA-FW:GigabitEthernet0/1 -- ISP2-SW:port4
+- NCT-FW:Management0/0 -- MGMT-SW:port6
+- NCT-FW:GigabitEthernet0/0 -- ISP1-SW:port5
+- NCT-FW:GigabitEthernet0/1 -- ISP2-SW:port5
+- MCT-FW:GigabitEthernet0/0 -- ISP1-SW:port6
+- MCT-FW:GigabitEthernet0/1 -- ISP2-SW:port6
+- WMA-FW:GigabitEthernet0/2 -- WMA-HOST:eth0
+- PRI-LAN:Ethernet0/0 -- PRI-FW:GigabitEthernet0/2
+- NCT-LAN:Ethernet0/0 -- NCT-FW:GigabitEthernet0/2
+- MCT-LAN:Ethernet0/0 -- MCT-FW:GigabitEthernet0/2
+- NYC-FW-2:GigabitEthernet0/0 -- ISP1-SW:port7
+- NYC-FW-2:GigabitEthernet0/1 -- ISP2-SW:port7
+- MGMT-SW:port7 -- MGMT-SW-2:port0
+- MCT-FW:Management0/0 -- MGMT-SW-2:port1
+- NYC-FW-2:Management0/0 -- MGMT-SW-2:port2
+- NNJ-FW-2:Management0/0 -- MGMT-SW-2:port3
+- NYC-HOST:eth0 -- NYC-INSIDE-SW:port1
+- NYC-FW-2:GigabitEthernet0/2 -- NYC-INSIDE-SW:port2
+- NNJ-FW-2:GigabitEthernet0/2 -- NNJ-INSIDE-SW:port1
+- NYC-FW-3:GigabitEthernet0/0 -- ISP1-SW:port1
+- NYC-FW-3:GigabitEthernet0/1 -- ISP2-SW:port1
+- NYC-FW-3:GigabitEthernet0/2 -- NYC-INSIDE-SW:port0
+- NYC-FW-3:Management0/0 -- MGMT-SW-2:port4
+- NYC-FW-3:GigabitEthernet0/3 -- NYC-FW-2:GigabitEthernet0/3
+- ISP1-SW-B:port0 -- ISP1-SW:port2
+- ISP2-SW-B:port0 -- ISP2-SW:port2
+- NNJ-FW-2:GigabitEthernet0/0 -- ISP1-SW-B:port1
+- NNJ-FW-2:GigabitEthernet0/1 -- ISP2-SW-B:port1
+- NNJ-FW-3:GigabitEthernet0/0 -- ISP1-SW-B:port2
+- NNJ-FW-3:GigabitEthernet0/1 -- ISP2-SW-B:port2
+- NNJ-FW-3:GigabitEthernet0/2 -- NNJ-INSIDE-SW:port0
+- NNJ-FW-3:Management0/0 -- MGMT-SW-2:port5
+- NNJ-FW-3:GigabitEthernet0/3 -- NNJ-FW-2:GigabitEthernet0/3
+
+groups:
+  firewalls:
+    agent: firewall-engineer
+    nodes: [FMC1, PRI-FW, WMA-FW, NCT-FW, MCT-FW, NYC-FW-2, NYC-FW-3, NNJ-FW-2, NNJ-FW-3]
+    addressing: |
+      Mgmt (198.18.128.0/18 via MGMT-EXT): FMC1 .11; FTDs .23-.26 (PRI/WMA/NCT/MCT),
+      .31-.34 (NYC-FW-2, NNJ-FW-2, NYC-FW-3, NNJ-FW-3); FmcRegKey cisco123key.
+      Underlay: ISP1 172.16.1.0/24 (gw .254), ISP2 172.16.2.0/24 (gw .254).
+      Site LANs: PRI 10.71.0.0/24 (OSPF), NCT 10.73.0.0/24 (EIGRP), MCT 10.74.0.0/24 (eBGP 65100).
+    tasks: |
+      Follow Cisco Validated Designs/Firewall SD-WAN/runbook.md: wait for FMC1 API
+      (15-30 min), confirm all 8 FTDs auto-register (day-0 carries FmcIp/RegKey),
+      then build the SD-WAN overlay via the FMC REST API - auto-VPN hub-and-spoke
+      VTIs from the NYC hub, iBGP AS 65070 overlay, dual-ISP ECMP (enableMultiPath),
+      branch LAN redistribution (OSPF/EIGRP/eBGP), secondary hub NNJ, and the
+      NYC-FW-2/3 HA pair.
+    acceptance: |
+      All FTDs registered + healthy in FMC; hub-spoke VTI tunnels UP; iBGP overlay
+      established; LAN-to-LAN pings between all site loopbacks (10.7x.100/101.x);
+      ECMP failover survives one ISP down; HA pair Active/Standby healthy.
+  underlay-and-lans:
+    agent: catalyst-engineer
+    nodes: [ISP1-RTR, ISP2-RTR, PRI-LAN, NCT-LAN, MCT-LAN]
+    tasks: |
+      Day-0 already carries the validated configs (ISP gateway addressing; per-site
+      OSPF/EIGRP/BGP LAN routing). Verify only - do not reconfigure.
+    acceptance: |
+      ISP gateways answer from the FTD outside subnets; each LAN router forms its
+      IGP/BGP adjacency with its site FTD once the firewalls are provisioned.

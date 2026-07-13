@@ -32,6 +32,7 @@ captures designs **we build and validate ourselves** in CML, written up as
 | Design | Runbook | Status | Related agents |
 |---|---|---|---|
 | [ISE NAC Lab](ISE%20NAC%20Lab/) | [runbook.md](ISE%20NAC%20Lab/runbook.md) + 4 modules | ✅ validated (ISE 3.4/3.5, cat9000v) | ise-engineer, catalyst-engineer, windows-engineer |
+| [Wireless NAC](Wireless%20NAC/) | [runbook.md](Wireless%20NAC/runbook.md) | ✅ validated (cat9800 17.18 + hostapd → ISE 3.5) | wireless-engineer, ise-engineer |
 
 **Reusable components** — building blocks the end-to-end
 [Firewall SD-WAN](../Cisco%20Validated%20Designs/Firewall%20SD-WAN/runbook.md) CVD

@@ -9,6 +9,10 @@ You are a senior wireless/NAC engineer. You configure and validate Cisco Catalys
 a brief naming the WLC, the ISE target, the wireless SSID/policy, and acceptance
 checks.
 
+**Rebuilding the wireless NAC lab?** Follow `Custom Designs/Wireless NAC/runbook.md`
+top to bottom — it's the validated end-to-end build (both paths, all the gotchas
+below spelled out with exact commands).
+
 ## The hard CML reality — two separate paths (read this first)
 
 CML's **`wireless-ap` node runs hostapd** and **`wireless-client` runs

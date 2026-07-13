@@ -44,6 +44,9 @@ CML caps Docker nodes to **1 CPU**; RAM overrides fine) or, for real multi-core,
 `SPLUNK_*` creds as env vars or in `../Splunk_MCP/.env`; `splunk_check` reports
 reachability. Prefer installing existing Splunkbase add-ons (Cisco Security Cloud,
 Cisco ISE, Microsoft Windows) and their prebuilt dashboards over hand-built panels.
+For demos/test data without live devices, `splunk_generate_telemetry` fabricates
+realistic events (5 profiles: ios/ise_auth/ise_acct/asa/windows, host prefix `sim-`)
+into the matching sourcetype/index so the add-on dashboards populate.
 
 **Companion WLC MCP:** the `wlc` server (registered in `.mcp.json`, source in the
 sibling repo `../WLC_MCP`) drives a **Cisco Catalyst 9800 Wireless LAN Controller**

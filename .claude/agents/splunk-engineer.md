@@ -77,6 +77,18 @@ host', earliest='-1h')` for quick one-shots; `splunk_search_job` +
 `splunk_search_job_results` for big/slow ones. A bare filter is auto-prefixed with
 `search`.
 
+**Populate dashboards without real devices.** `splunk_generate_telemetry(profile,
+count, span_minutes, transport='hec'|'udp', token=…, seed=…)` fabricates realistic
+events for the exact sourcetype/index pairs above - profiles `ios`, `ise_auth`,
+`ise_acct`, `asa`, `windows` (see `splunk_list_telemetry_profiles`). Timestamps are
+backfilled over `span_minutes` so time-range panels fill immediately; all hosts are
+prefixed **`sim-`**. HEC needs a token (widen it to multiple indexes by POSTing
+`index`+`indexes` if it's single-index). Verify with an index-scoped search
+(`index=ise sourcetype=cisco:ise:syslog host=sim-* | stats count`) - a bare
+`host=sim-*` finds nothing because those indexes aren't in the default search set.
+Use this for demos and to smoke-test add-on field extractions; use real device
+forwarding for actual validation.
+
 **Install a Splunkbase add-on.** Download the `.tgz` (auth-gated on splunkbase.com)
 to the Splunk host (SSH as `cisco@198.18.128.51`, drop in `/tmp`), then
 `splunk_install_app('/tmp/<addon>.tgz')`, `splunk_enable_app(<name>)`, and restart

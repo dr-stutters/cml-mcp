@@ -137,7 +137,7 @@ def register(mcp: FastMCP, client: CMLClient) -> None:
         if action == "status":
             report = manager.connection_report(lab_id)
             if not report["testbed_loaded"]:
-                testbed = await manager.get_testbed(lab_id)
+                await manager.get_testbed(lab_id)  # load it (side effect), then re-read
                 report = manager.connection_report(lab_id)
             return dumps(report)
         if action == "disconnect":

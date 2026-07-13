@@ -7,7 +7,6 @@ gracefully with an actionable message when it is not installed.
 
 from __future__ import annotations
 
-import os
 
 from mcp.server.fastmcp import FastMCP, Image
 

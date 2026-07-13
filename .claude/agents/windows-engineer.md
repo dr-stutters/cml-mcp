@@ -47,7 +47,16 @@ log back in as **DOMAIN\Administrator** (same password) and check
 **Stand up a CA (for ISE EAP-TLS / trust).**
 `win_install_feature('ADCS-Cert-Authority')` →
 `win_install_adcs_ca(ca_type='EnterpriseRootCA')` → `win_get_ca_certificate`
-returns the CA cert as PEM.
+returns the CA cert as PEM. `win_sign_csr(csr_pem, template=…)` submits a CSR and
+returns the issued cert; it targets the host's default CA automatically (passes
+`certreq -config`, so it can't hang on the interactive CA picker). **The template
+sets the EKU *and* where the subject comes from:** `WebServer` = serverAuth and
+honours the CSR's subject (use it for an ISE server/EAP identity cert); `User` =
+clientAuth but builds the subject from the *enrolling* account (a CSR signed as
+Administrator returns as `CN=Administrator`, ignoring the CSR CN). For a per-user
+clientAuth cert with a chosen subject (EAP-TLS as a specific user), duplicate a
+template with "supply in the request" + Client Authentication EKU — no stock
+template combines both.
 
 **DNS / DHCP.** `win_add_dns_a_record(zone, name, ip, create_ptr=True)` gives ISE
 a resolvable name; `win_create_dhcp_scope` + `win_add_dhcp_reservation` for

@@ -257,7 +257,8 @@ directory:
   endpoints, TrustSec/SGTs, policy sets and identity/endpoint groups, and
   monitors live RADIUS sessions via the companion ISE MCP's `mcp__ise__*` tools;
   also configures and tests the NAD side (802.1X/MAB/RADIUS) on CML switches via
-  pyATS, proving auth from both ends.
+  pyATS, proving auth from both ends — MAB, PEAP-MSCHAPv2 against AD, and EAP-TLS
+  all validated end-to-end against ISE 3.4/3.5.
 - **windows-engineer** — Windows Server / **Active Directory** specialist
   (external VM over WinRM): AD DS (domain, users, groups, OUs), DNS, DHCP, and
   **AD CS** (a certificate authority) via the companion Windows MCP's

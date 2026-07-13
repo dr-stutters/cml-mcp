@@ -99,6 +99,50 @@ list) + get. RBAC: `ise_list_admin_users` (3.4+) and `ise_list_admin_groups` +
 `ise_create_admin_user` (3.5+ only; e.g. an ERS-Admin account - the create can
 return an ISE-side 500 on some builds, so treat it best-effort).
 
+## NAC on CML — hard-won gotchas (validated end-to-end)
+
+The full wired-802.1X stack has been proven in CML against ISE 3.4 and 3.5 — MAB,
+PEAP-MSCHAPv2 against AD, and EAP-TLS. Bake in these traps:
+
+- **cat9000v RADIUS must source from a front-panel, global-table interface — NOT
+  the OOB Mgmt-vrf port (Gi0/0).** The auth-manager (SMD) RADIUS for MAB/dot1x
+  silently times out over Mgmt-vrf even though IOSd RADIUS (`test aaa`) succeeds
+  there and masks it (ISE MnT shows nothing arriving). Fix: wire a front-panel
+  data port (e.g. Gi1/0/1) to the underlay, put an SVI on it in the global table,
+  and `aaa group server radius … / no ip vrf forwarding Mgmt-vrf /
+  ip radius source-interface Vlan<x>`; register that SVI's IP as the NAD.
+- **Only the cat9000v does functional NAC.** iosvl2 and ioll2-xe accept the
+  `mab`/`authentication`/`access-session` config but never punt the endpoint frame
+  to the auth-manager (port stays `Client: none`), so MAB/dot1x never fire — use a
+  real dataplane switch.
+- **Join ISE to AD via ERS:** POST `/ers/config/activedirectory` {name, domain},
+  then PUT `…/{id}/joinAllNodes` (NOT `/join`, which wants a node target) with
+  additionalData `username`+`password` only (`domainName` is rejected). Verify by
+  the ISE computer account appearing in AD.
+- **One identity source for mixed PEAP + EAP-TLS:** point the Dot1X authN rule at
+  the built-in **`All_User_ID_Stores`** sequence — it already bundles the
+  `Preloaded_Certificate_Profile` CAP (→ EAP-TLS) + `All_AD_Join_Points`
+  (→ PEAP/EAP against AD) + Internal Users, so no custom sequence is needed. (The
+  ERS resource is `/ers/config/idstoresequence`, wrapper `IdStoreSequence`, item
+  list `idSeqItem` — not the obvious names.)
+- **EAP-TLS trust + identity:** `ise_import_trusted_cert(cert_pem,
+  trust_for_client_auth=True)` for the issuing CA so ISE validates client certs;
+  optionally bind a CA-signed EAP identity cert (`/api/v1/certs/signed-certificate/
+  bind` needs the pending CSR `id`) — binding restarts ISE services (~10-20 min).
+  A client cert whose CN/UPN maps to an AD user authenticates against
+  `All_AD_Join_Points`.
+- **Supplicant:** a wpa_supplicant client does wired 802.1X
+  (`wpa_supplicant -D wired -i eth0 -c <conf>`, `key_mgmt=IEEE8021X`,
+  `eapol_flags=0`; PEAP → `eap=PEAP`/`phase2="auth=MSCHAPV2"`, EAP-TLS →
+  `eap=TLS`/`client_cert`/`private_key`/`ca_cert`). CML's base Alpine lacks it; a
+  Debian `net-tools` node has apt, but the cat9000v dataplane throttles bulk
+  downloads — pull the `.deb`s directly or transfer files in ~700-byte base64
+  chunks (`tr -d '[:space:]'` on reassembly) since the console garbles long lines.
+- **MnT lag:** unpatched ISE (e.g. 3.4.0.608) may not surface live sessions/auths
+  in MnT even when auth passes at the RADIUS layer; a patched box (3.5.0.527 p3)
+  shows them in seconds. Trust the NAD session + RADIUS accept/accounting-ack as
+  ground truth; check logging categories / patch level if MnT stays empty.
+
 ## Reporting
 
 Report per task: what you configured on ISE (with the object ids returned), what

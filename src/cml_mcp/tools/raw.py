@@ -17,7 +17,7 @@ def register(mcp: FastMCP, client: CMLClient) -> None:
         method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"],
         path: str,
         query_params: dict[str, Any] | None = None,
-        body: str | None = None,
+        body: dict[str, Any] | list[Any] | str | None = None,
         save_response_to: str | None = None,
     ) -> str:
         """Call any CML REST API endpoint directly (authenticated).
@@ -30,18 +30,21 @@ def register(mcp: FastMCP, client: CMLClient) -> None:
             method: HTTP method.
             path: API path relative to /api/v0, e.g. '/labs' or '/system_health'.
             query_params: Optional query parameters.
-            body: Optional request body as JSON text (or plain text for
-                text endpoints).
+            body: Optional request body. Pass a JSON object/array directly, or a
+                string (parsed as JSON, else sent as plain text for text endpoints).
             save_response_to: If set, write the raw response bytes to this local
                 file path instead of returning them (for binary downloads).
         """
         json_body: Any = None
         content: str | None = None
         if body is not None:
-            try:
-                json_body = json.loads(body)
-            except json.JSONDecodeError:
-                content = body
+            if isinstance(body, (dict, list)):
+                json_body = body
+            else:
+                try:
+                    json_body = json.loads(body)
+                except (json.JSONDecodeError, TypeError):
+                    content = body
         if save_response_to:
             resp = await client.request(
                 method, path, params=query_params,

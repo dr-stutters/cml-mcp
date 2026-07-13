@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
 
@@ -93,16 +93,29 @@ def register(mcp: FastMCP, client: CMLClient) -> None:
         link_id: str,
         action: Literal["start", "stop", "status", "list_packets", "download"],
         save_path: str | None = None,
+        bpfilter: str = "",
+        max_packets: int | None = None,
+        max_time: int = 60,
     ) -> str:
         """Manage packet capture on a link.
 
         Actions: start/stop a capture, check status, list captured packets
         (decoded summaries), or download the pcap file to a local path
         (save_path required for download). The lab must be running.
+
+        For action='start' the CML API requires a stop condition, so at least
+        one of ``max_time`` (seconds, default 60) or ``max_packets`` is always
+        sent. ``bpfilter`` is an optional Berkeley packet filter (e.g.
+        ``'udp port 1812 or udp port 1813'``); empty captures everything.
         """
         base = f"/labs/{lab_id}/links/{link_id}/capture"
         if action == "start":
-            return dumps(await client.put(f"{base}/start"))
+            body: dict[str, Any] = {"maxtime": max_time}
+            if max_packets is not None:
+                body["maxpackets"] = max_packets
+            if bpfilter:
+                body["bpfilter"] = bpfilter
+            return dumps(await client.put(f"{base}/start", json_body=body))
         if action == "stop":
             return dumps(await client.put(f"{base}/stop"))
         if action == "status":

@@ -75,3 +75,21 @@ The main session coordinates you with **ise-engineer**:
 Hand back: what you built (domain/CA/records with the returned detail), the CA
 PEM when relevant, and anything the operator must do at the console (e.g. enable
 WinRM, approve a pending cert request).
+
+## Forward telemetry to Splunk
+
+For observability, get Windows event logs into the lab Splunk (splunk2,
+`198.18.128.51`) under a `windows` index. Two paths:
+- **Universal Forwarder (best fidelity):** install the Splunk UF via
+  `win_run_powershell` (download the MSI, then `msiexec /i splunkforwarder*.msi
+  RECEIVING_INDEXER=198.18.128.51:9997 AGREETOLICENSE=yes /quiet`), then drop an
+  `inputs.conf` with `[WinEventLog://Security]` / `System` / `Application`. Pair
+  with the **Splunk Add-on for Microsoft Windows** on the indexer for parsing
+  (sourcetypes `WinEventLog:*`).
+- **HEC (agentless, structured):** `win_run_powershell_json` to POST events to
+  Splunk HEC (`https://198.18.128.51:8088/services/collector`, header
+  `Authorization: Splunk <token>`).
+
+splunk-engineer owns the Splunk receiver side (the `windows` index, the forwarder
+receiver on 9997, or a HEC token) - ask it to set those up and confirm events
+land (`index=windows`). You own the Windows side (install/point the forwarder).

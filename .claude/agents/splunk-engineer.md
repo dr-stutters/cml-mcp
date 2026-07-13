@@ -52,10 +52,19 @@ naming the Splunk target, the sources, and what to ingest/build.
 ## Common workflows
 
 **Create a per-source index + input.** `splunk_create_index(name)` (e.g. `cisco`,
-`ise`, `windows`), then open a receiver: `splunk_create_udp_input(514,
+`ise`, `windows`), then open a receiver: `splunk_create_udp_input(5514,
 sourcetype='cisco:ios', index='cisco')` for classic syslog, or
-`splunk_create_tcp_input(...)`. Point the device's `logging host <splunk-ip>` at
-it (that device-side config belongs to the catalyst/firewall/ise/windows agents).
+`splunk_create_tcp_input(...)`. **Use UDP 5514, not 514** - splunkd runs as the
+non-root `splunk` user and can't bind a privileged port (<1024); to use the
+canonical 514 instead, `sudo setcap cap_net_bind_service=+ep /opt/splunk/bin/
+splunkd` then restart. Point the device's `logging host <splunk-ip> transport udp
+port 5514` at it (the device-side config belongs to the catalyst/firewall/ise/
+windows agents - the port is transport only; the **sourcetype** drives add-on
+parsing). Proven sourcetype→index map: `cisco:ios`→`cisco` (IOS/IOS-XE),
+`cisco:asa`/`cisco:ftd`→`cisco` (firewalls), `cisco:ise:syslog`→`ise`,
+`WinEventLog:*`→`windows`. Verify: `splunk_search('index=<idx> | stats count by
+host sourcetype', earliest='-15m')` and report the counts. Proven live: SW-ISE35
+cat9000v → UDP 5514 → `index=cisco sourcetype=cisco:ios`.
 
 **HEC (structured ingest).** `splunk_enable_hec()` once, then
 `splunk_create_hec_token(name, index=…, sourcetype=…)` - returns the token. Send

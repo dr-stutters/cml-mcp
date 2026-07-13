@@ -177,6 +177,24 @@ enforcement, CoA, and full CTS policy download. Bake in these traps:
   `show cts environment-data` (SGT name table + server ALIVE) and `show cts rbacl
   <name>` (a downloaded `-00` generation with the ACEs present).
 
+## Forward telemetry to Splunk
+
+When the brief asks for observability, forward ISE logs to the lab Splunk (splunk2,
+`198.18.128.51`) into an `ise` index (sourcetype `cisco:ise:syslog`, parsed by the
+Splunk Add-on for Cisco ISE):
+- ISE remote logging is configured under **Administration > System > Logging >
+  Remote Logging Targets** (add a UDP syslog target `198.18.128.51` port **5514**),
+  then map the **Logging Categories** (Passed/Failed Authentications, RADIUS
+  Accounting, etc.) to that target. This is largely a GUI/console task - the ERS/
+  OpenAPI surfaces expose little of the logging config, so drive it in the GUI (or
+  note it as an operator step) and confirm from Splunk.
+- The richer, structured alternative is **pxGrid** (session/topic subscription) -
+  a documented phase-2 path, not syslog.
+
+splunk-engineer owns the Splunk receiver side (the `ise` index + UDP 5514 input);
+have it confirm auth events land (`index=ise sourcetype=cisco:ise:syslog`). Port
+**5514** because splunkd runs non-root and can't bind 514.
+
 ## Reporting
 
 Report per task: what you configured on ISE (with the object ids returned), what

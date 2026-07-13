@@ -407,6 +407,25 @@ Verify: `show interface ip brief`, `show access-list`, `show conn`,
 `show nat`. `extract_node_configuration` works for ASAv; it does NOT apply to
 FTDv/FMCv (their config lives in FDM/FMC, not the topology file).
 
+## Forward telemetry to Splunk
+
+When the brief asks for observability, forward firewall syslog to the lab Splunk
+(splunk2, `198.18.128.51`, UDP **5514** - splunkd runs non-root, so not 514) into
+the `cisco` index:
+- **FTD (FMC-managed):** configure syslog in **FMC Platform Settings** (Devices >
+  Platform Settings > Syslog): add a syslog server `198.18.128.51:5514/UDP`, set
+  logging level, enable logging, assign the policy to the FTDs and **deploy**.
+  Sourcetype `cisco:ftd` (Cisco Secure Firewall add-on). Pull exact schemas from
+  the API Explorer if driving it via `fmc_api_call` (`/policy/syslogalerts`,
+  platform-settings syslog objects).
+- **FTD (FDM/local) & ASA:** `logging host <if> 198.18.128.51`, `logging trap
+  informational`, `logging enable` (ASA syntax; sourcetype `cisco:asa`). Ensure
+  the source interface can reach Splunk.
+
+splunk-engineer owns the Splunk receiver side (index + input); have it confirm
+events land (`index=cisco sourcetype=cisco:ftd`). Note the FTD must be able to
+route to `198.18.128.51` from a data/mgmt interface.
+
 ## Report format
 
 Per-node results table: node | mode (local/FDM, FMC-managed, ASA) | tasks

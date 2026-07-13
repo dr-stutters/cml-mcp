@@ -72,6 +72,27 @@ configs from the architect usually leave consoles open without login.
   `show spanning-tree summary`, `show etherchannel summary` (expect SU/P).
 - Discovery sanity: `show cdp neighbors` matches the brief's link table.
 
+## Forward telemetry to Splunk
+
+When the brief asks for observability, forward the device's syslog to the lab
+Splunk (splunk2, `198.18.128.51`) into the `cisco` index as sourcetype
+`cisco:ios`. Use UDP **5514**, not 514 - splunkd runs non-root and can't bind a
+privileged port:
+
+    service timestamps log datetime msec localtime show-timezone
+    logging source-interface <global-table SVI>
+    logging host 198.18.128.51 transport udp port 5514
+    logging trap informational
+
+**Source-interface gotcha (same trap as RADIUS):** syslog has to egress an
+interface that can actually reach Splunk. On cat9000v the OOB **Mgmt-vrf can't be
+the source for a global-table destination** - point `logging source-interface` at
+the front-panel global SVI (e.g. `Vlan100`, the same uplink the RADIUS/CoA source
+uses), or append `vrf Mgmt-vrf` to the `logging host` if Splunk is only reachable
+that way. Verify: `show logging | include <splunk-ip>` shows "started", and have
+splunk-engineer confirm events land (`index=cisco host=<source-ip>`). Proven live:
+SW-ISE35 → Splunk, `cisco:ios` events searchable.
+
 ## Report format
 
 End with a per-node results table: node | tasks applied | verification

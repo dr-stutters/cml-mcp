@@ -182,18 +182,24 @@ enforcement, CoA, and full CTS policy download. Bake in these traps:
 When the brief asks for observability, forward ISE logs to the lab Splunk (splunk2,
 `198.18.128.51`) into an `ise` index (sourcetype `cisco:ise:syslog`, parsed by the
 Splunk Add-on for Cisco ISE):
-- ISE remote logging is configured under **Administration > System > Logging >
-  Remote Logging Targets** (add a UDP syslog target `198.18.128.51` port **5514**),
-  then map the **Logging Categories** (Passed/Failed Authentications, RADIUS
-  Accounting, etc.) to that target. This is largely a GUI/console task - the ERS/
-  OpenAPI surfaces expose little of the logging config, so drive it in the GUI (or
-  note it as an operator step) and confirm from Splunk.
-- The richer, structured alternative is **pxGrid** (session/topic subscription) -
-  a documented phase-2 path, not syslog.
+- ISE remote logging **cannot be configured via any API** - not OpenAPI (the
+  *System Settings* group only exposes proxy + telemetry-gateway) nor ERS. It's
+  **GUI-only**: **Administration > System > Logging > Remote Logging Targets >
+  Add** a UDP Syslog target (Name `Splunk`, host `198.18.128.51`, port **5515**,
+  LOCAL6, Max Length 8192, Enabled), then **Logging Categories** > edit **Passed
+  Authentications / Failed Attempts / RADIUS Accounting** and move `Splunk` into
+  *Selected*. Flag it as an operator step and confirm from Splunk. (Proven: a MAB
+  re-auth then shows `CISE_Passed_Authentications` + `CISE_RADIUS_Accounting` in
+  `index=ise`.)
+- To get ISE data **without** the GUI step, pull it by API instead: the **Cisco
+  Catalyst Add-on** collects ISE config/inventory over the ISE OpenAPI (Basic
+  auth) - config only, no live auth. **pxGrid** (cert, phase-2) is the real
+  streaming alternative for auth/session events.
 
-splunk-engineer owns the Splunk receiver side (the `ise` index + UDP 5514 input);
-have it confirm auth events land (`index=ise sourcetype=cisco:ise:syslog`). Port
-**5514** because splunkd runs non-root and can't bind 514.
+splunk-engineer owns the Splunk receiver side (the `ise` index + UDP **5515**
+input); have it confirm auth events land (`index=ise sourcetype=cisco:ise:syslog`).
+Port **5515** (not the switch's 5514) so ISE stays a distinct sourcetype; both are
+>1024 because splunkd runs non-root and can't bind 514.
 
 ## Reporting
 

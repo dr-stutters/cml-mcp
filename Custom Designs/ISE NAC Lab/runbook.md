@@ -91,7 +91,10 @@ config (this whole stage, incl. the Vlan100 global-table fix) already baked into
 day-0, turning stages 2-3 into verification. The manual build:
 
 The cat9000v's OOB **Mgmt-vrf** port (Gi0/0) **cannot** carry NAC RADIUS or CoA
-(see Gotchas). Give the switch a **front-panel, global-table** path to ISE:
+(see Gotchas, and [modules/mgmt-plane.md](modules/mgmt-plane.md) for the proof +
+the real-world **in-band management VRF** alternative). Give the switch a
+**front-panel** path to ISE — either a global-table SVI (below) or, for real-world
+mgmt/data separation, a front-panel SVI in a dedicated VRF (mgmt-plane module):
 
 1. Add a **2nd System-Bridge external connector** (`DATA-EXT`) and link a front-panel
    port (Gi1/0/1) to it; **start the node + the new interface** (interfaces added to

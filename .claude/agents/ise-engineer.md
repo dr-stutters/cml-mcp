@@ -193,13 +193,18 @@ The full wired-NAC stack has been proven in CML against ISE 3.4 and 3.5 — MAB,
 PEAP-MSCHAPv2 against AD, EAP-TLS, dynamic authZ (dACL/VLAN), TrustSec SGT+SGACL
 enforcement, CoA, and full CTS policy download. Bake in these traps:
 
-- **cat9000v RADIUS must source from a front-panel, global-table interface — NOT
-  the OOB Mgmt-vrf port (Gi0/0).** The auth-manager (SMD) RADIUS for MAB/dot1x
-  silently times out over Mgmt-vrf even though IOSd RADIUS (`test aaa`) succeeds
-  there and masks it (ISE MnT shows nothing arriving). Fix: wire a front-panel
-  data port (e.g. Gi1/0/1) to the underlay, put an SVI on it in the global table,
-  and `aaa group server radius … / no ip vrf forwarding Mgmt-vrf /
-  ip radius source-interface Vlan<x>`; register that SVI's IP as the NAD.
+- **cat9000v RADIUS must source from a FRONT-PANEL SVI — NOT the OOB Mgmt-vrf port
+  (Gi0/0).** The auth-manager (SMD) RADIUS for MAB/dot1x silently times out over the
+  built-in Mgmt-vrf/Gi0/0 (control-plane only) even though IOSd RADIUS (`test aaa`,
+  ping) succeeds there and masks it. Proven definitively (#18): SMD platform state
+  drops, `sessmgrd: RADIUS not responding`. The front-panel SVI can be **global-table**
+  (simple) OR — real-world, preferred — a **user-defined in-band management VRF**:
+  `vrf definition MGMT`; `interface Vlan<x> / vrf forwarding MGMT / ip address …`;
+  `ip route vrf MGMT 0/0 <gw>`; `aaa group server radius … / ip vrf forwarding MGMT /
+  ip radius source-interface Vlan<x>`; and CoA `client <ise-ip> vrf MGMT server-key …`.
+  Register the SVI's IP as the NAD (unchanged either way). Full writeup +
+  proof: `Custom Designs/ISE NAC Lab/modules/mgmt-plane.md`. (Moving an SVI into a VRF
+  flushes ARP — first ping may be 0%, recovers immediately.)
 - **Only the cat9000v does functional NAC.** iosvl2 and ioll2-xe accept the
   `mab`/`authentication`/`access-session` config but never punt the endpoint frame
   to the auth-manager (port stays `Client: none`), so MAB/dot1x never fire — use a
@@ -249,9 +254,9 @@ enforcement, CoA, and full CTS policy download. Bake in these traps:
   <n>`). Prove it with `show cts role-based counters` — **HW-Denied** increments;
   the virtual cat9000v-uadp genuinely enforces in hardware.
 - **CoA:** the `dynamic-author` client must be in the **same VRF/table as the RADIUS
-  source** — after moving RADIUS to global Vlan100, move the CoA client too
-  (`client <ise-ip> server-key …`, no `vrf Mgmt-vrf`) or ISE's CoA is silently
-  dropped (ISE logs `11213 No response from NAD`). Trigger via MnT:
+  source** — global (`client <ise-ip> server-key …`) or, with the in-band management
+  VRF, carry the vrf on the client line (`client <ise-ip> vrf MGMT server-key …`).
+  Mismatch and ISE's CoA is silently dropped (`11213 No response from NAD`). Trigger via MnT:
   `ise_mnt_call('/CoA/Reauth/{node}/{mac}/{reauthType}')` — the last segment is a
   **numeric** reauthType (1/2), NOT the NAS IP; `results:true` = ACKed. A CoA
   re-applies policy in place with **no link bounce** (no LINK-3/LINEPROTO events).

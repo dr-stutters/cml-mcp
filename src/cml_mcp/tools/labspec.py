@@ -884,6 +884,11 @@ def register(mcp: FastMCP, client: CMLClient) -> None:
         design: UUIDs, MACs, extra unconnected interfaces, smart annotations
         (regenerated from tags), and lab state are not represented. For CML's
         native verbose format use export_lab instead.
+
+        The exported day-0 is whatever the node's configuration field holds -
+        for long-lived labs that were configured at runtime, run
+        extract_node_configuration on each running device FIRST (and verify a
+        key behavior afterwards), or the spec captures a stale pre-fix config.
         """
         topo = await client.get(f"/labs/{lab_id}/topology",
                                 params={"exclude_configurations": False})

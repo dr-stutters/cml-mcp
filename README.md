@@ -382,6 +382,11 @@ build). The build report includes one delegation brief per `groups:` entry,
 ready to fan out to the specialist agents. Not covered in v1: diff/apply
 reconciliation against an existing lab, and link conditioning.
 
+**Capturing a long-lived lab?** `export_lab_spec` emits whatever each node's
+day-0 configuration field holds. If devices were configured at runtime, run
+`extract_node_configuration` on them first (and re-verify a key behavior),
+or the spec will capture a stale config from before your fixes.
+
 ### Labs
 
 | Tool | Description |

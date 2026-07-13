@@ -20,6 +20,10 @@
     "windows": {
       "command": "uv",
       "args": ["run", "--directory", "../Windows_MCP", "windows-mcp"]
+    },
+    "splunk": {
+      "command": "uv",
+      "args": ["run", "--directory", "../Splunk_MCP", "splunk-mcp"]
     }
   }
 }

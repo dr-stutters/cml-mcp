@@ -32,6 +32,19 @@ CSRs. WinRM must be enabled on the server first (`Enable-PSRemoting -Force`); se
 `WINRM_*` creds as env vars or in `../Windows_MCP/.env`. Promote-to-DC and role
 installs reboot the box (WinRM drops - reconnect and re-check).
 
+**Companion Splunk MCP:** the `splunk` server (registered in `.mcp.json`, source
+in the sibling repo `../Splunk_MCP`) wraps Splunk Enterprise's REST management API
+(port 8089, HTTP Basic) and the HTTP Event Collector (port 8088, token auth) - the
+splunk-engineer agent uses its `mcp__splunk__*` tools (indexes, data inputs for
+syslog, HEC tokens, SPL search, apps/add-ons, dashboards, users/roles) instead of
+raw httpx. It's the observability/SIEM sink the other stacks forward telemetry to.
+Splunk runs as a CML node - either the stock `splunk` **Docker** node (fast, but
+CML caps Docker nodes to **1 CPU**; RAM overrides fine) or, for real multi-core, an
+`ubuntu` **KVM** node with Splunk installed on-box (4 vCPU works). Set its
+`SPLUNK_*` creds as env vars or in `../Splunk_MCP/.env`; `splunk_check` reports
+reachability. Prefer installing existing Splunkbase add-ons (Cisco Security Cloud,
+Cisco ISE, Microsoft Windows) and their prebuilt dashboards over hand-built panels.
+
 ## Orchestrating lab work with the specialist agents
 
 This repo ships Claude Code agents in `.claude/agents/`:
@@ -51,6 +64,11 @@ This repo ships Claude Code agents in `.claude/agents/`:
   VM over WinRM): AD DS (domain, users, groups, OUs), DNS, DHCP, and AD CS (a CA)
   via the `mcp__windows__*` tools - the identity/PKI/DNS backing for ISE (external
   identity, EAP-TLS via the CA cert, resolvable CSR names).
+- **splunk-engineer** - observability/SIEM specialist for Splunk Enterprise:
+  indexes, data inputs (syslog UDP/TCP) and HEC tokens for ingest, SPL search,
+  saved searches, users/roles, and installing Splunkbase apps/add-ons and their
+  prebuilt dashboards - via the `mcp__splunk__*` tools. Owns the Splunk receiving
+  side + verification; device-side log forwarding is done by the device agents.
 
 Protocol for lab requests involving these device families:
 
@@ -59,8 +77,8 @@ Protocol for lab requests involving these device families:
    architect must decide the FTD management mode up front (day-0
    `ManageLocally` / `FmcIp`) - ask the user if it isn't stated.
 2. Fan each brief out to the matching specialist (**catalyst-engineer**,
-   **firewall-engineer**, **ise-engineer**, **windows-engineer**), passing the
-   brief verbatim. Parallel invocations
+   **firewall-engineer**, **ise-engineer**, **windows-engineer**,
+   **splunk-engineer**), passing the brief verbatim. Parallel invocations
    are fine ONLY if their node sets are disjoint - two agents must never
    drive the same node's console (each agent runs its own MCP server process;
    the per-device locks don't protect across agents).

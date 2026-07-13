@@ -10,16 +10,19 @@ Built directly against the CML REST API (`/api/v0`); developed and tested
 against **CML 2.10** (build 13).
 
 > 🆕 **Companion servers — [Firepower MCP](https://github.com/dr-stutters/firepower-mcp),
-> [ISE MCP](https://github.com/dr-stutters/ise-mcp) and
-> [Windows MCP](https://github.com/dr-stutters/windows-mcp).**
+> [ISE MCP](https://github.com/dr-stutters/ise-mcp),
+> [Windows MCP](https://github.com/dr-stutters/windows-mcp) and
+> [Splunk MCP](https://github.com/dr-stutters/splunk-mcp).**
 > Standalone sibling MCP servers for the Cisco Secure Firewall Management Center
-> (FMC), Cisco Identity Services Engine (ISE), and Windows Server (AD/DNS/DHCP/AD
-> CS over WinRM). They're registered here as the `fmc`, `ise` and `windows`
-> servers in [.mcp.json](.mcp.json) and used by the firewall-engineer,
-> ise-engineer and windows-engineer agents — FMC/ISE/Windows work runs through
-> `mcp__fmc__*` / `mcp__ise__*` / `mcp__windows__*` tools, no raw HTTP/WinRM. See
-> [Firepower](#companion-server-firepower-fmc-mcp), [ISE](#companion-server-cisco-ise-mcp)
-> and [Windows](#companion-server-windows-server-mcp) below.
+> (FMC), Cisco Identity Services Engine (ISE), Windows Server (AD/DNS/DHCP/AD
+> CS over WinRM), and Splunk Enterprise (SIEM/observability). They're registered
+> here as the `fmc`, `ise`, `windows` and `splunk` servers in
+> [.mcp.json](.mcp.json) and used by the firewall-engineer, ise-engineer,
+> windows-engineer and splunk-engineer agents — that work runs through
+> `mcp__fmc__*` / `mcp__ise__*` / `mcp__windows__*` / `mcp__splunk__*` tools, no
+> raw HTTP/WinRM. See [Firepower](#companion-server-firepower-fmc-mcp),
+> [ISE](#companion-server-cisco-ise-mcp), [Windows](#companion-server-windows-server-mcp)
+> and [Splunk](#companion-server-splunk-mcp) below.
 
 ## What it can do
 
@@ -118,6 +121,35 @@ PowerShell remoting ([pypsrp](https://github.com/jborean93/pypsrp)).
 Clone it alongside this repo (`../Windows_MCP`) to enable the `windows` server, or
 use it entirely on its own — see its
 [README](https://github.com/dr-stutters/windows-mcp).
+
+## Companion server: Splunk MCP
+
+CML gives you the fabric; the other companions give you firewalls, identity and
+the directory; **[Splunk MCP](https://github.com/dr-stutters/splunk-mcp)** gives
+you the **SIEM / observability sink** they all forward telemetry to. It's a
+separate, independently usable MCP server for **Splunk Enterprise**.
+
+- **45 tools** across **system** (info/health/licensing), **search** (one-shot +
+  async SPL, saved searches), **indexes**, **ingest** — data inputs
+  (syslog UDP/TCP, file monitor) and the **HTTP Event Collector** (enable, tokens,
+  send) — **apps/add-ons**, **dashboards**, **KV store** and **users/roles**, plus
+  a `splunk_rest_call` escape hatch. REST management API on `8089` (Basic auth),
+  HEC on `8088` (token).
+- **The sink for the rest of the stack** — point CML devices' syslog, FTD/FMC, ISE
+  and Windows at it; the device agents configure forwarding, splunk-engineer owns
+  the receiving side + dashboards. Prefer existing Splunkbase add-ons (Cisco
+  Security Cloud, Cisco ISE, Microsoft Windows) and their prebuilt dashboards.
+- **Runs as a CML node** — the stock `splunk` Docker node is quick but CML caps
+  Docker nodes to **1 CPU** (RAM overrides fine); for real multi-core, install
+  Splunk on an `ubuntu` KVM node (4 vCPU works).
+- **Wired in here** — registered as the `splunk` server in [.mcp.json](.mcp.json)
+  (it runs the sibling repo at `../Splunk_MCP`), and the **splunk-engineer** agent
+  uses its `mcp__splunk__*` tools. Set the `SPLUNK_*` credentials as env vars or in
+  `../Splunk_MCP/.env`.
+
+Clone it alongside this repo (`../Splunk_MCP`) to enable the `splunk` server, or
+use it entirely on its own — see its
+[README](https://github.com/dr-stutters/splunk-mcp).
 
 ## Requirements
 

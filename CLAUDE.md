@@ -91,3 +91,14 @@ the matching specialist should consult that brief (e.g. firewall-engineer reads
 `Cisco Validated Designs/Firewall SD-WAN/design-brief.md`). See the library
 [README](Cisco%20Validated%20Designs/README.md) for the "add a design" workflow.
 Source PDFs are gitignored (kept local); the briefs and links are committed.
+
+## Custom Designs library
+
+`Custom Designs/` is the counterpart to the CVD library for **our own** lab builds
+— one subfolder per design, each with a repeatable `runbook.md` (prerequisites →
+topology → stage-by-stage config → verification → teardown → gotchas) and optional
+per-capability `modules/`. Unlike CVDs there are no source PDFs, so everything is
+committed. When a request maps to a design, the matching specialists rebuild
+straight from its runbook (e.g. "rebuild the ISE NAC lab" → `Custom Designs/ISE NAC
+Lab/runbook.md`, fanned out to ise-engineer / catalyst-engineer / windows-engineer).
+See the library [README](Custom%20Designs/README.md) for the "add a design" workflow.

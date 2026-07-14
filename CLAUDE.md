@@ -90,6 +90,14 @@ This repo ships Claude Code agents in `.claude/agents/`:
   tags) over RESTCONF via the `mcp__wlc__*` tools, and drives live wireless 802.1X
   to ISE using CML's hostapd AP + wpa_supplicant client (hostapd ≠ CAPWAP, so the
   controller and the live client are two separate paths in CML).
+- **secure-by-design** - security-architecture specialist that runs a **READ-ONLY**
+  secure-by-design review across the built lab + stack (device running-configs, ISE
+  policy/certs, FMC access-control policies, C9800 WLAN security, and whether
+  telemetry actually lands in Splunk): audits management-plane hardening, identity/
+  NAC coverage, segmentation (ACL/TrustSec/zones), secure transport, logging, and
+  resilience, then returns a prioritised findings report + per-device-group
+  remediation briefs. Advisory only - never changes config; the main session fans
+  its briefs to the other specialists.
 
 Protocol for lab requests involving these device families:
 
@@ -112,6 +120,10 @@ Protocol for lab requests involving these device families:
    the architect.
 4. After specialists report, run lab-level acceptance from the main session
    (e.g. end-to-end pings via `pyats_execute`, `get_lab_layer3_addresses`).
+5. To security-review or harden a lab, send it to **secure-by-design** (read-only).
+   It returns a findings report + per-device-group remediation briefs; the main
+   session then fans those briefs back to the matching specialists (step 2) to apply
+   the fixes - secure-by-design never changes config itself.
 
 Check the CML fabric before troubleshooting devices: whenever connectivity
 between nodes is down (no adjacency, failover "Comm Failure", dead link),

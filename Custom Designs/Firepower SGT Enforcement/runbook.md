@@ -1,255 +1,194 @@
 # Firepower SGT Enforcement — runbook
 
-**Status (2026-07-14): TrustSec chain proven end-to-end into the FTD; ACP enforcement
-BLOCKED on a real architectural gap — needs FMC↔ISE pxGrid (roadmap #31).** See
-[The critical finding](#the-critical-finding-read-this-first).
+**Status (2026-07-15): PROVEN end-to-end.** ISE assigns an SGT → ISE shares the IP→SGT
+binding → **FMC↔ISE pxGrid** hands it to the FTD → **Snort** enforces an SGT-based
+access-control policy: **Employees permitted, Contractors denied** to a protected server.
+See [Enforcement proof](#enforcement-proof).
 
-Goal: **ISE assigns an SGT at MAB → the Catalyst tags the endpoint and shares its IP→SGT
-binding over SXP → the FTD enforces an SGT-based access-control policy.**
+Goal: **ISE assigns an SGT at MAB → the IP→SGT binding reaches the FTD → the FTD enforces an
+SGT-based access-control policy** (permit Employees / deny Contractors to the server).
 
 ## The critical finding (read this first)
 
-**A direct switch→FTD FlexConfig `cts sxp` peer feeds the FTD's LINA data plane ONLY. It
-does NOT drive FMC Access-Control-Policy SGT enforcement.**
+**A direct switch→FTD `cts sxp` peer (FMC FlexConfig) feeds the FTD's LINA data plane ONLY.
+It does NOT drive FMC Access-Control-Policy SGT enforcement.**
 
 FMC ACP rules with an SGT condition on an **Allow** action are evaluated by **Snort**, and
 Snort only learns SGT-IP mappings from **FMC↔ISE integration (pxGrid)** or **inline SGT
-tags** — never from LINA's `cts` subsystem. So the SXP binding arrives in LINA, LINA
-matches the network part of the permit rule and hands off to Snort, Snort sees
-`src sgt: 0 / unknown`, no SGT rule matches, and the flow hits the ACP **default = BLOCK**.
+tags** — never from LINA's `cts` subsystem. So a switch→FTD SXP binding lands in LINA, LINA
+matches the *network* part of the rule and defers to Snort, Snort sees `src sgt: 0`, no SGT
+rule matches, and the flow hits the ACP **default = BLOCK**.
 
-`packet-tracer input inside icmp 10.40.0.10 8 0 10.60.0.10` proves it exactly:
-- Header: `Mapping security-group 4 to IP address 10.40.0.10` — **LINA knows SGT=4**
-- Phase 4 (LINA ACL): matches network part of `Employees-to-SRV-PERMIT`, defers to Snort
-- Phase 16/17 (Snort): `src sgt: 0, src sgt type: unknown` → `Matched rule ... Block`
-- Result: `drop (firewall) Blocked ... by the firewall preprocessor`
-- `show access-list CSM_FW_ACL_ | include security-group` → **empty** (no SGT match in LINA;
-  the SGT condition lives entirely in Snort).
+`packet-tracer` proved it exactly, *before* pxGrid was wired up:
+- Header: `Mapping security-group 4 to IP address 10.40.0.10` — LINA knows SGT=4.
+- Snort phase: `src sgt: 0, src sgt type: unknown` → `Matched rule ... Block` → `drop`.
+- `show access-list CSM_FW_ACL_ | include security-group` → **empty** (the SGT condition
+  lives entirely in Snort, not the LINA ACL).
 
-**Correct design for FMC-managed FTD SGT enforcement:** FMC → Integration → Identity
-Sources → **Cisco ISE (pxGrid)**; FMC learns SGT-IP from ISE (ISE as SXP aggregator and/or
-pxGrid session directory) and pushes the mappings to the FTD **Snort** engine; the ACP rule
-uses the **ISE** SGT group. Then Snort sees `sgt: 4` and the permit matches. The direct
-switch→FTD FlexConfig SXP listener is redundant for enforcement (it only ever populated
-LINA) and can be retired. → this is roadmap **#31 (pxGrid)**; see [Next steps](#next-steps--the-pxgrid-fix-31).
+**The fix = FMC↔ISE pxGrid.** FMC learns the SGT-IP mappings from ISE (Session Directory +
+SXP topics) and pushes them to the FTD **Snort** engine; the ACP rule uses the **ISE** SGT
+group. Then Snort sees the real SGT and the rule matches. The direct switch→FTD FlexConfig
+SXP listener is redundant for enforcement (LINA-only) and can be retired.
 
 ## Topology
 
 Layered onto the canonical NAC/TrustSec core lab
 **`cb53d7fe-aecc-4770-9353-f6af8b6d7637`** (ISE35-MAB), reusing the existing switch + ISE 3.5
-+ endpoint; the SGT tier adds a fresh FMC + FTD + server.
++ endpoint; the SGT tier adds an FMC + FTD + server.
 
 ```
 EP-ISE35 (10.40.0.10, SGT Employees/4 via MAB)
    │ gw 10.40.0.1 (SW Vlan40)
-SW-ISE35 (cat9000v)  ── SXP speaker (On) ──►  FTD-SGT inside Eth0/0 (10.50.0.2)
-   │ inside Gi1/0/4 10.50.0.1                    │ outside Eth0/1 10.60.0.1
-   │ route 10.60.0.0/24 → 10.50.0.2             │ static 10.40.0.0/24 → 10.50.0.1
-   └────────────────────────────────────────►  SRV-SGT (10.60.0.10, gw 10.60.0.1)
-FMC-SGT (198.18.128.13, admin/SgtLab#2026Fw, v10.0.1) manages FTD-SGT
+SW-ISE35 (cat9000v)  ──►  FTD-SGT inside Eth0/0 (10.50.0.2)
+   │ inside Gi1/0/4 10.50.0.1                 │ outside Eth0/1 10.60.0.1
+   │ route 10.60.0.0/24 → 10.50.0.2          │ static 10.40.0.0/24 → 10.50.0.1
+   └─────────────────────────────────────►  SRV-SGT (10.60.0.10, gw 10.60.0.1)
+FMC-SGT (198.18.128.13, admin/SgtLab#2026Fw, v10.0.1) manages FTD-SGT, integrates with ISE pxGrid
+ISE35 (198.18.134.35, 3.5) — SGT assignment + pxGrid publisher
 ```
 
 | Node | Role | Addressing |
 |---|---|---|
-| FMC-SGT | FMCv | mgmt 198.18.128.13; eval license enabled |
+| FMC-SGT | FMCv | mgmt 198.18.128.13; eval license (Advantage/Premier) |
 | FTD-SGT | FTDv, FMC-managed routed | inside 10.50.0.2/30, outside 10.60.0.1/24; RegKey `sgtreg123` |
 | SRV-SGT | net-tools | 10.60.0.10/24, gw 10.60.0.1 (runtime-only) |
-| SW-ISE35 | cat9000v (existing) | inside Gi1/0/4 10.50.0.1; Vlan40 10.40.0.1; NAD .66 (MGMT VRF) |
+| SW-ISE35 | cat9000v (existing) | inside Gi1/0/4 10.50.0.1; Vlan40 10.40.0.1; ISE NAD .66 (Mgmt VRF) |
 | EP-ISE35 | endpoint (existing, busybox) | 10.40.0.10, gw 10.40.0.1 |
 
-## What is built + validated
+## Build
 
-- **ISE→switch→SXP→FTD-LINA chain fully proven:**
-  - EP-ISE35 authorized via MAB, SGT **Employees(4)**; switch `show cts role-based sgt-map
-    all` → `10.40.0.10  4  LOCAL`.
-  - Switch is the SXP **speaker**; FTD is the **listener**; `show cts sxp connections`
-    (both ends) = **On**, password Set.
-  - FTD LINA learned it: `show cts sxp sgt-map` → `SGT 4 / 10.40.0.10 / Active`.
-- **FMC config (all via GUI):** ACP **SGT-ACP** (default BLOCK) rule#1 Employees(4)→
-  HOST-SRV-10.60.0.10 ALLOW, rule#2 Contractors(5)→SRV BLOCK. Interfaces/zones/route
-  deployed. Objects: SecurityGroupTag Employees(4)/Contractors(5).
-- **FlexConfig SXP listener** (object `FTD_SGT_SXP`, policy `SGT-SXP-FlexConfig`) built +
-  deployed clean (deploy SUCCEEDED = device accepted the CLI). Generated CLI:
-  ```
-  cts sxp enable
-  cts sxp default password CTSsxp123
-  cts sxp connection peer 10.50.0.1 source 10.50.0.2 password default mode local listener
-  ```
-- **Enforcement: FAILS** (EP→SRV ping 100% loss) — the [critical finding](#the-critical-finding-read-this-first)
-  above. Routing is confirmed good (switch→FTD inside ping 100%; switch route to
-  10.60.0.0/24 → 10.50.0.2). The FTD Snort drops on default-BLOCK because it has no SGT.
+### 1. SGT assignment + the IP→SGT binding (ISE)
 
-## FMC FlexConfig SXP — the editor gauntlet (gotchas)
-
-Configuring the FTD SXP listener via the FMC FlexConfig GUI is genuinely painful. What it
-took:
-
-1. **FTD SXP/CTS is FlexConfig/GUI-only** — the FMC 10.0.1 REST API has zero SXP surface,
-   FlexConfig objects aren't API-creatable, and the FTD diagnostic CLI has global config
-   disabled. So it must be built in the FMC GUI.
-2. **The "Insert" dropdown only opens by clicking the ▾ CARET**, not the button text. And
-   **Escape closes the whole dialog**, not just the menu (click elsewhere to dismiss a menu).
-3. **The object Save-check rejects any non-secret-key token after the word `password`** —
-   plaintext (`CTSsxp123`) *and* a plain Text-Object variable both fail with "contains
-   sensitive information as plain text. Add ... using secret key variable." (Note: **Validate
-   passes** a text var but **Save** rejects it — Save is stricter.)
-4. **But the device needs the literal keyword `password default`** (or `none`) on the
-   connection line — a secret-key variable there would deploy the literal password value,
-   which is invalid SXP connection syntax.
-5. **The workaround:** the default-password line uses a real **Secret Key** var
-   (`@sxp_pw` = `CTSsxp123`). The connection line's `password default` is hidden inside a
-   **Text Object** (`sxpPwKeyword` value = `password default`) and referenced **bare**
-   (`... source 10.50.0.2 $sxpPwKeyword mode local listener`) so the object body never
-   literally contains "password" on that line → Save passes; deploy expands to valid
-   `password default`. Text Objects must be pre-created under **Objects > FlexConfig > Text
-   Object** (they can't be created inline from the FlexConfig insert dialog).
-6. **Preview Config** masks the token after `password` as `******` (display only) — verify
-   the real expansion on the device after deploy.
-
-## Next steps — the pxGrid fix (#31)
-
-### pxGrid build log + resume plan (banked 2026-07-14, ~90% done)
-
-**Done:**
-- ISE 3.5 (`ise35`, 198.18.134.35): **pxGrid + SXP personas enabled** via GUI (no reboot on
-  3.5); pxGrid Services → Settings → **auto-approve cert-based accounts** ON.
-- **IP-SGT binding** `10.40.0.10 → Employees(4)` created **via API** (OpenAPI TrustSec
+- EP-ISE35 authorized via **MAB → SGT Employees(4)**; switch `show cts role-based sgt-map all`
+  → `10.40.0.10  4  LOCAL`.
+- **pxGrid + SXP personas enabled** on ise35 (GUI; no reboot on 3.5); pxGrid Services →
+  Settings → **auto-approve certificate-based accounts = ON**.
+- **Static IP-SGT binding** `10.40.0.10 → Employees(4)` created via API (OpenAPI TrustSec
   `POST /api/v1/trustsec/ip-sgt-mapping`, body `{ipHost, sgt:"Employees (4/0004)",
-  sgtDomains:["default"]}`) — shipped as reusable tools `ise_create/list/delete_ip_sgt_mapping`
-  in ISE_MCP `tools/trustsec.py` (commit 005392b).
-- **FMC↔ISE integration** (FMC 198.18.128.13 → Integration → Identity Sources → **Identity
-  Services Engine → Quick Configuration**): host `ise35.mitchcloud.lab`, admin creds,
-  subscribe **Session Directory + SXP** topics. Admin/MnT **trust established**.
-- **FMC management DNS fixed** → Primary `198.18.134.11` (the mitchcloud DC), so FMC resolves
-  `ise35.mitchcloud.lab`. (FMC mgmt DNS is **not** in the FMC REST API — appliance-only, at
-  Administration → Configuration → Management Interfaces.)
-- **pxGrid 502 fully root-caused + ISE side fixed:** ISE's pxGrid cert was a dCloud-demo
-  leftover (`CN=ise.demo.dcloud.cisco.com`, ISE-internal-CA). Rebound the **pxGrid role to the
-  `ise35.mitchcloud.lab` system cert** (GUI: Certificates → System Certificates → edit
-  `ise35-eap-mitchcloud` → tick pxGrid → Save; the API PUT `UpdateSystemCertRequest` throws a
-  server-exception on cross-subject role transfer). `:8910` now presents
-  `CN=ise35.mitchcloud.lab` signed by **Mitchcloud-Root-CA**.
+  sgtDomains:["default"]}`) — shipped as reusable ISE_MCP tools
+  `ise_create/list/delete_ip_sgt_mapping` (`tools/trustsec.py`). This is what ISE advertises
+  over the pxGrid **SXP topic**.
 
-**Remaining (the finish):** FMC must **trust Mitchcloud-Root-CA** to validate the pxGrid cert
-chain — FMC currently trusts only the self-signed cert ISE serves on `:443`. Blocked by ISE's
-messy cert config: `:443` (MnT) serves a **self-signed default** cert even though the Admin role
-is on the CA-signed cert, so FMC's Quick-Config trust covers the wrong cert. Two finish paths:
-1. **Untangle ISE certs** so `:443` and `:8910` present the *same* consistent cert → FMC's
-   Quick-Config trust then covers both. Cleanest, but restarts ISE's **admin** service (surgery
-   on the shared canonical NAC ISE — do deliberately, not rushed).
-2. **FMC Advanced Configuration** — provision an FMC pxGrid **client cert** + import it into
-   ISE trusted certs, set **MNT Server CA** (the self-signed `:443` cert) and **pxGrid Server
-   CA = Mitchcloud-Root-CA** (PEM captured at scratchpad `chaincert_2.pem` from the `:8910`
-   chain). Fiddly, several steps; Advanced's client-cert dropdown is empty (Quick-Config's
-   auto cert isn't exposed).
-Then: FMC Test passes → Save → **Deploy** → `packet-tracer input inside icmp 10.40.0.10 8 0
-10.60.0.10` should show Snort `src sgt: 4` → `Employees-to-SRV-PERMIT` ALLOW → run the
-permit/deny test.
+### 2. FMC access-control policy (SGT-ACP)
 
-**Lab state left intact:** ISE pxGrid cert rebind (correct — keep), FMC DNS fix (keep),
-`ISE_MCP/.env` repointed `.30→.35` (keep — we're on 3.5). FMC ISE-integration is **unsaved**
-(needs the passing Test). `ise.demo.dcloud.cisco.com` pxGrid cert now shows "Not in use".
+ACP **SGT-ACP**, default action **BLOCK**, using the **ISE** SGT groups:
+- rule `Employees-to-SRV-PERMIT` — src SGT Employees(4) → HOST-SRV-10.60.0.10 = **Allow**
+- rule `Contractors-to-SRV-DENY` — src SGT Contractors(5) → SRV = **Block**
 
-### Original enforcement plan
+Interfaces/zones/route deployed; server object `HOST-SRV-10.60.0.10`.
 
-To make the FTD **actually enforce**:
-1. **ISE 3.5**: enable pxGrid; approve/auto-approve pxGrid clients; (optionally make ISE the
-   SXP aggregator so the switch speaks SXP to ISE and ISE owns the SGT-IP mappings).
-2. **FMC (198.18.128.13)**: Integration → Identity Sources → **Cisco ISE**; exchange
-   pxGrid certs (the fiddly part); confirm FMC pulls SGT groups + SGT-IP mappings.
-3. **ACP**: ensure rule #1/#2 SGT condition uses the **ISE** SGT group (`Employees`/
-   `Contractors`), not an inline-only custom SGT object.
-4. **Deploy**, then re-run `packet-tracer input inside icmp 10.40.0.10 8 0 10.60.0.10` — 
-   Phase 16/17 should show `src sgt: 4` → match `Employees-to-SRV-PERMIT` = ALLOW.
-5. Retire the `FTD_SGT_SXP` FlexConfig (LINA-only, redundant once pxGrid feeds Snort).
-6. Then the permit/deny test: EP(Employees)→SRV PERMIT; re-tag EP→Contractors → DENY.
+### 3. FMC↔ISE pxGrid integration (the enabler)
+
+FMC → **Integrations → Identity Sources → Identity Services Engine → Advanced Configuration
+(Old)**:
+
+| Field | Value |
+|---|---|
+| Primary Host Name/IP | `ise35.mitchcloud.lab` |
+| pxGrid Client Certificate | `FMC-SGT-pxGrid-Client` |
+| MNT Server CA | `ISE35-MnT-CA` |
+| pxGrid Server CA | `Mitchcloud-Root-CA` |
+| Subscribe To | **Session Directory** + **SXP** topics |
+
+Prerequisites that make the above work:
+- **FMC management DNS → `198.18.134.11`** (the mitchcloud DC) so FMC resolves
+  `ise35.mitchcloud.lab`. FMC mgmt DNS is **not** in the FMC REST API — set it at
+  Administration → Configuration → Management Interfaces.
+- **Certificate chain:** the FMC pxGrid client cert (`FMC-SGT-pxGrid-Client`, cut from a
+  dedicated `FMC-SGT-pxGrid-CA`) is imported into ISE's trusted certs; FMC trusts ISE's
+  pxGrid server cert via **`Mitchcloud-Root-CA`** and the MnT `:443` cert via `ISE35-MnT-CA`.
+  ISE's `:8910` presents `CN=ise35.mitchcloud.lab` signed by `Mitchcloud-Root-CA` (the
+  pxGrid system-cert role was moved off the dCloud-demo leftover cert onto `ise35-eap`).
+
+**Test → "Primary host: Success" → Save.** ISE **pxGrid → Client Management** then shows the
+FMC clients (`fmc-…` + `t-fmc-…`) **Enabled/approved** (auto-approve). FMC now receives the
+SGT-IP bindings and pushes them to the FTD Snort engine.
+
+## Enforcement proof
+
+`packet-tracer` on FTD-SGT (LINA/diagnostic CLI). All three source SGTs are **learned via
+pxGrid** (`src sgt type: sxp`) and select **distinct** ACP rules:
+
+| Source IP | SGT (via pxGrid) | Snort rule matched | Verdict |
+|---|---|---|---|
+| `10.40.0.10` | **Employees (4)** | `268434434` Employees-to-SRV-PERMIT | **ALLOW** |
+| `10.40.0.11` | **Contractors (5)** | `268434435` Contractors-to-SRV-DENY | **DROP** |
+| _(unmapped)_ | `0` / unknown | `268434432` default | Block |
+
+Permit trace (`... icmp 10.40.0.10 8 0 10.60.0.10`):
+```
+Phase 15 SNORT identity:  src sgt: 4, src sgt type: sxp   → ALLOW
+Phase 16 SNORT firewall:  src sgt: 4 ... Matched rule 268434434 - Allow   → allow
+```
+Deny trace (`... icmp 10.40.0.11 8 0 10.60.0.10`):
+```
+Phase 15 SNORT identity:  src sgt: 5, src sgt type: sxp
+Phase 16 SNORT firewall:  src sgt: 5 ... Matched rule 268434435 - Block   → drop
+```
+
+That is the whole chain working: **ISE (SGT + IP-SGT binding) → pxGrid SXP topic → FMC → FTD
+Snort → SGT-based ACP → permit Employees / deny Contractors.** Contrast the pre-pxGrid state
+where Snort saw `src sgt: 0` and everything hit the default BLOCK.
+
+## Field lessons (hard-won)
+
+- **A flaky browser cost days.** The pxGrid integration *looked* broken for a long stretch:
+  ISE's own admin GUI threw `Server Error: undefined`, `pxGrid Client Management`/`Settings`
+  wouldn't load, and `systemCertificatesAction.do … status:0`. **`status:0` means the HTTP
+  request never completed client-side — a browser/network failure, not a server error.**
+  Restarting the operator's browser cleared every one of those with **zero changes to ISE**.
+  → When an ISE admin GUI errors, **suspect the browser first; reproduce via API/CLI before
+  concluding ISE is broken.** (The overnight full-ISE restart + Data Grid/IMS cert renews
+  chased this ghost — harmless, and they left ISE's messaging/data-grid certs on the internal
+  CA, which is fine.)
+- **`AccountCreate` 503 is a red herring.** `POST /pxgrid/control/AccountCreate` is the
+  *password-based* registration endpoint, **disabled by default**. FMC uses **certificate-
+  based** pxGrid and never calls it. The other control endpoints (AccountActivate /
+  ServiceLookup / pubsub) answering **401** = servlets up, awaiting an approved client = healthy.
+- **A `red` FTD health in FMC lags — don't call it a dead tunnel.** The enforcing Employees
+  mapping was on the FTD the whole time while FMC health showed red.
+- **Propagation timing:** the SGT-IP set present *at pxGrid connect* reaches the FTD fast (FMC
+  bulk-downloads it). A **new** ISE static IP-SGT binding takes **~5-6 min** to reach FTD Snort
+  via the *incremental* pxGrid/SXP path — wait before concluding it failed.
+- **Not** the cause: licensing (Essential/Advantage/Premier all enabled in eval), and **not**
+  FMC bug CSCwq75449 (that's an FMC-7.7.x Quick-Config *502*; we're on FMC 10.0.1 via Advanced
+  Configuration, and the transient error was a 500, per Cisco doc 225770).
+
+## The FlexConfig SXP listener — the LINA-only path (historical, superseded)
+
+Before pxGrid, a switch→FTD `cts sxp` listener was built via FMC FlexConfig. It populates
+**LINA only** and does **not** drive Snort enforcement (see the critical finding), so it's
+redundant now — but the editor gotchas are worth keeping:
+
+1. FTD SXP/CTS is **FlexConfig/GUI-only** — no FMC 10.x REST surface, FlexConfig objects
+   aren't API-creatable, and the FTD diagnostic CLI has global config disabled.
+2. The **Insert dropdown opens only by clicking the ▾ CARET**, not the button text; **Escape
+   closes the whole dialog** (click elsewhere to dismiss just a menu).
+3. The object **Save-check rejects any non-secret-key token after the word `password`** —
+   plaintext *and* a plain Text-Object var both fail ("add … using secret key variable");
+   Validate passes a text var but Save is stricter and rejects it.
+4. But the device needs the literal keyword **`password default`** on the connection line (a
+   secret-key var there would deploy the literal password = invalid SXP syntax).
+5. **Workaround:** default-password line uses a real Secret Key var (`@sxp_pw`=`CTSsxp123`);
+   the connection's `password default` is hidden inside a **Text Object** (`sxpPwKeyword`
+   value=`password default`) referenced **bare**, so the object body has no literal "password"
+   on that line → Save passes, deploy expands to valid `password default`. Text Objects must
+   be pre-created under Objects → FlexConfig → Text Object.
+
+Generated CLI (LINA): `cts sxp enable` / `cts sxp default password CTSsxp123` / `cts sxp
+connection peer 10.50.0.1 source 10.50.0.2 password default mode local listener`.
 
 ## Teardown / state notes
 
-- FTD/FMC config lives in the FMC DB (not the CML topology). To tear down: delete FTD-SGT
-  from FMC, then FMC/FTD/SRV nodes from lab `cb53d7fe…`; **leave the NAC core
-  (switch/ISE/EP) intact** — it's canonical. Then revert `../Firepower_MCP/.env` to the
-  baseline (`FMC_URL=https://198.18.128.11`, `FMC_PASSWORD=Cisc01@3`).
-- `../Firepower_MCP/.env` currently points at the **SGT FMC (.13)** (gitignored) — leave it
-  there for the pxGrid work.
+- FTD/FMC config lives in the FMC DB (not the CML topology). To tear down: remove the ISE
+  pxGrid integration + delete FTD-SGT from FMC, then delete the FMC/FTD/SRV nodes from lab
+  `cb53d7fe…`; **leave the NAC core (switch/ISE/EP) intact** — it's canonical. Then revert
+  `../Firepower_MCP/.env` to baseline (`FMC_URL=https://198.18.128.11`,
+  `FMC_PASSWORD=Cisc01@3`).
+- `../Firepower_MCP/.env` currently points at the **SGT FMC (.13)** (gitignored) — correct
+  while this lab stays up.
 - SRV-SGT is net-tools/runtime-only — re-apply `ip addr add 10.60.0.10/24 dev eth0` /
   `ip route replace default via 10.60.0.1` after any restart.
-
----
-
-### pxGrid ROOT CAUSE (2026-07-14, definitive) — ISE pxGrid Session provider service DOWN
-
-After completing ALL FMC-side config (cert trust, mgmt DNS→DC, FMC pxGrid client cert
-from the dedicated FMC-SGT-pxGrid-CA, MnT+pxGrid Server CAs, Session Directory + SXP
-topics) and ALL ISE-side config (pxGrid+SXP personas, auto-approve, IP-SGT binding via
-API, pxGrid role rebound to ise35.mitchcloud.lab cert, ISE Messaging Service role also
-moved onto that cert), the FMC "Test" still failed: **"PXGrid v2 is enabled [ERROR]:
-Failed to contact pxGrid node at 'ise35.mitchcloud.lab': Server returned 500"**.
-
-Root-caused it end-to-end (NOT a cert/trust problem, NOT FMC, NOT the MCP tooling):
-
-- Replayed the pxGrid v2 control handshake directly with FMC's client cert
-  (`fmc_pxgrid_client_caSigned.crt`/`.key`) against `https://198.18.134.35:8910`:
-  - TLS mutual-auth SUCCEEDS (clean HTTP 401/503, not a handshake error) → ISE trusts
-    FMC's cert; the FMC-side trust chain is correct.
-  - `POST /pxgrid/control/AccountCreate` → **HTTP 503 Service Unavailable** (empty body),
-    persistently (polled for minutes). `AccountActivate`/`ServiceLookup` → 401.
-- ISE **Administration > pxGrid Services > Summary**: 0 pubsub connections, 0 total
-  clients (0 approved / 0 pending), 0 errors — FMC's AccountCreate never landed.
-- ISE **pxGrid > Diagnostics > Live Log**: only ONE entry, a `LOG_START` from the
-  PREVIOUS day — the pxGrid controller has logged NO client activity since.
-- ISE **pxGrid > Diagnostics > Tests > Health Monitoring Test** (ISE's OWN internal
-  pxGrid client doing Session subscribe + bulk download) → **"Connect failed"**. Log tail:
-  ```
-  pxGrid Node: ise35.mitchcloud.lab
-  [INFO] Session service unavailable
-  [INFO] ------------------ Connection Test FAILED ------------------
-  ```
-
-**Conclusion:** the pxGrid **Session Directory provider service on ISE is unavailable** —
-so even ISE's own internal client can't connect. This is 100% internal to ISE's pxGrid
-stack, not the FMC integration. The trigger was almost certainly the ISE Messaging
-Service certificate reassignment (its restart left the pxGrid Session/pubsub providers
-wedged). **No additional certificate fixes this** (the Windows CA cannot help — the
-services are simply down).
-
-**Remediation (one step, needs the user / an authenticated ISE session):** restart ISE
-application services so the messaging bus + pxGrid providers re-initialise consistently:
-- CLI: `application stop ise` then `application start ise` (or `application restart ise`)
-  on ise35 — ~15-20 min; OR
-- GUI (no CLI login): Administration > System > Deployment > ise35 > edit, toggle the
-  **pxGrid** persona OFF > Save (app restart), then ON > Save (app restart).
-Then re-run pxGrid Diagnostics > Tests > Health Monitoring Test until it PASSES
-("Session service available"), and re-run the FMC ISE Advanced-config **Test** — the 500
-should clear. Then Save the FMC integration, Deploy, and run the enforcement test
-(`packet-tracer input inside icmp 10.40.0.10 8 0 10.60.0.10` → expect Snort src sgt:4 →
-Employees-to-SRV PERMIT / ALLOW; flip EP to Contractors → DENY).
-
-Everything on both sides is staged and correct — this is purely blocked on ISE pxGrid
-service health, which a restart resolves. Deliberately NOT restarting ISE unattended (a
-~15-20 min appliance-services outage is heavier than the create/delete round-trips the
-lab is cleared for) — flagged for the user to green-light.
-
----
-**pxGrid CLOSURE (2026-07-14) — dCloud ISE image control-plane corruption, NOT fixable in-session.**
-Drove `application stop/start ise` via the dCloud web console (user-authorised). Result:
-pxGrid **data plane (pubsub) recovered** - server log shows internal `~ise-admin-ise35` +
-`~ise-mnt-ise35` clients reconnected + subscribed to `com.cisco.ise.session.internal`; the
-original "Session service unavailable" is GONE. BUT the pxGrid **control/admin plane stayed
-broken**: ISE's OWN GUI (pxGrid Client Management / Settings / Diagnostics-Tests) throws
-`Server Error: undefined`, the legacy System-Certificates GUI won't load
-(`systemCertificatesAction.do ... status:0`), and the internal Health Test errors - all with
-ZERO FMC involvement, so it's conclusively ISE-side. Control REST on :8910: AccountActivate
-/ServiceLookup/pubsub = 401 (servlets UP, need approved client), only legacy `AccountCreate`
-= 503 (password-account creation disabled on this cert-based pxGrid = red herring).
-Remediations tried, ALL completed successfully, NONE fixed the control plane:
-(1) full `application stop/start ise`; (2) `POST /api/v1/certs/renew-certificate {certType:DATAGRID}`;
-(3) same with `IMS`. (renew-certificate API works even though the cert GUI servlet is dead -
-enum certType = DATAGRID|IMS|OCSP.) Only nuclear option left = `POST /api/v1/certs/ise-root-ca/regenerate`
-(reissues whole internal CA + full restart) - NOT done (low confidence + disruptive; user weighing).
-**Ruled OUT as causes:** licensing (ESSENTIAL/ADVANTAGE/PREMIER all ENABLED, eval 88d, pxGrid
-LicenseEvaluator clean in log); FMC bug CSCwq75449 (that's an FMC-7.7.x Quick-Config 502 defect
-fixed in FW 10.0.0 - we're on **FMC 10.0.1** and used **Advanced Configuration**, and our error
-was a 500 not a 502; per Cisco doc 225770). **Verdict: FMC-side config 100% correct + staged;
-blocker is this dCloud ISE image's corrupted pxGrid control servlet layer. Everything else in the
-TrustSec/SGT chain is proven; SXP/LINA proven; #32 SXP tooling shipped.**
+- Left in place as the deny demonstrator: ISE static IP-SGT binding `10.40.0.11 →
+  Contractors(5)` (delete via `ise_delete_ip_sgt_mapping` if you want the lab back to just the
+  Employees binding).

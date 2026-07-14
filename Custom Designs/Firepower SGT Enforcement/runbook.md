@@ -229,3 +229,27 @@ Everything on both sides is staged and correct — this is purely blocked on ISE
 service health, which a restart resolves. Deliberately NOT restarting ISE unattended (a
 ~15-20 min appliance-services outage is heavier than the create/delete round-trips the
 lab is cleared for) — flagged for the user to green-light.
+
+---
+**pxGrid CLOSURE (2026-07-14) — dCloud ISE image control-plane corruption, NOT fixable in-session.**
+Drove `application stop/start ise` via the dCloud web console (user-authorised). Result:
+pxGrid **data plane (pubsub) recovered** - server log shows internal `~ise-admin-ise35` +
+`~ise-mnt-ise35` clients reconnected + subscribed to `com.cisco.ise.session.internal`; the
+original "Session service unavailable" is GONE. BUT the pxGrid **control/admin plane stayed
+broken**: ISE's OWN GUI (pxGrid Client Management / Settings / Diagnostics-Tests) throws
+`Server Error: undefined`, the legacy System-Certificates GUI won't load
+(`systemCertificatesAction.do ... status:0`), and the internal Health Test errors - all with
+ZERO FMC involvement, so it's conclusively ISE-side. Control REST on :8910: AccountActivate
+/ServiceLookup/pubsub = 401 (servlets UP, need approved client), only legacy `AccountCreate`
+= 503 (password-account creation disabled on this cert-based pxGrid = red herring).
+Remediations tried, ALL completed successfully, NONE fixed the control plane:
+(1) full `application stop/start ise`; (2) `POST /api/v1/certs/renew-certificate {certType:DATAGRID}`;
+(3) same with `IMS`. (renew-certificate API works even though the cert GUI servlet is dead -
+enum certType = DATAGRID|IMS|OCSP.) Only nuclear option left = `POST /api/v1/certs/ise-root-ca/regenerate`
+(reissues whole internal CA + full restart) - NOT done (low confidence + disruptive; user weighing).
+**Ruled OUT as causes:** licensing (ESSENTIAL/ADVANTAGE/PREMIER all ENABLED, eval 88d, pxGrid
+LicenseEvaluator clean in log); FMC bug CSCwq75449 (that's an FMC-7.7.x Quick-Config 502 defect
+fixed in FW 10.0.0 - we're on **FMC 10.0.1** and used **Advanced Configuration**, and our error
+was a 500 not a 502; per Cisco doc 225770). **Verdict: FMC-side config 100% correct + staged;
+blocker is this dCloud ISE image's corrupted pxGrid control servlet layer. Everything else in the
+TrustSec/SGT chain is proven; SXP/LINA proven; #32 SXP tooling shipped.**

@@ -28,7 +28,7 @@ against **CML 2.10** (build 13).
 
 ## What it can do
 
-- **Full API coverage** — 73 tools spanning labs, nodes, links, interfaces,
+- **Full API coverage** — 76 tools spanning labs, nodes, links, interfaces,
   annotations, node/image definitions, users, groups, licensing, and system
   administration. Every one of the ~203 REST API operations is reachable:
   anything without a dedicated tool is available through the `cml_api_call`
@@ -78,13 +78,14 @@ It's a separate, independently usable MCP server for **Cisco Identity Services
 Engine (ISE)**, built to the same pattern (FastMCP, async httpx). ISE is usually
 an external VM rather than a CML node.
 
-- **128 tools** across three REST surfaces (all HTTP Basic auth): **OpenAPI**
-  (443, `/api/…`) for endpoints, TrustSec (SGT/SGACL/egress), policy sets and
-  policy authoring, day-2 ops (repositories, backups, patches, licensing,
-  certificates + management, system summary), guest/sponsor, profiler, RBAC/admin;
-  **ERS** (443, `/ers/config/…`) for network devices (NADs), internal users and
-  identity/endpoint groups; and **MnT** (443, `/admin/API/mnt/…`) for read-only
-  live session monitoring.
+- **184 tools** across three REST surfaces (all HTTP Basic auth): **OpenAPI**
+  (443, `/api/…`) for endpoints (incl. bulk ops), TrustSec (SGT/SGACL/egress,
+  SXP/IP-SGT), policy sets + authoring, authentication depth (allowed protocols,
+  identity sequences), TACACS+ device admin, ANC quarantine, posture, guest/sponsor,
+  profiler, RBAC/admin, and day-2 ops (repositories, backups, patches, licensing,
+  certificates, async task tracking, system summary); **ERS** (443, `/ers/config/…`)
+  for network devices (NADs), internal users and identity/endpoint groups; and **MnT**
+  (443, `/admin/API/mnt/…`) for read-only live session + recent-auth monitoring.
 - **Spec-driven discovery** — `ise_search_spec` + `ise_get_definition` search the
   ISE OpenAPI docs (23 groups on 3.4, 30 on 3.5) for any endpoint and its exact
   schema, and `ise_openapi_call` / `ise_ers_call` / `ise_mnt_call` are the generic
@@ -131,7 +132,7 @@ the directory; **[Splunk MCP](https://github.com/dr-stutters/splunk-mcp)** gives
 you the **SIEM / observability sink** they all forward telemetry to. It's a
 separate, independently usable MCP server for **Splunk Enterprise**.
 
-- **45 tools** across **system** (info/health/licensing), **search** (one-shot +
+- **47 tools** across **system** (info/health/licensing), **search** (one-shot +
   async SPL, saved searches), **indexes**, **ingest** — data inputs
   (syslog UDP/TCP, file monitor) and the **HTTP Event Collector** (enable, tokens,
   send) — **apps/add-ons**, **dashboards**, **KV store** and **users/roles**, plus
@@ -262,6 +263,10 @@ Once connected, just describe what you want in natural language. Examples:
 > "Build an FMC-managed FTD lab with two FTDs, register them, pair them into
 > HA, then fail over to the standby and show me it took over."
 
+See **[EXAMPLE_PROMPT.md](EXAMPLE_PROMPT.md)** for a full end-to-end scenario plus
+focused per-area prompts (topology-as-code, device interaction, WAN emulation,
+licensing, screenshots).
+
 A typical agent workflow maps to tools like this:
 
 ```
@@ -292,7 +297,7 @@ Things worth knowing:
 
 ## Specialist agents (Claude Code)
 
-The repo ships seven Claude Code agent definitions in
+The repo ships eight Claude Code agent definitions in
 [.claude/agents/](.claude/agents/) — other MCP clients can ignore this
 directory:
 
@@ -330,6 +335,13 @@ directory:
   (RESTCONF via the companion WLC MCP's `mcp__wlc__*` tools) and live wireless
   802.1X in CML (hostapd AP ↔ wpa_supplicant client → ISE). Knows the
   hostapd≠CAPWAP two-path reality and the C9800-CL Vlan1 mgmt gotcha.
+- **secure-by-design** — **read-only** security-architecture reviewer. Audits the
+  built lab + stack (device running-configs, ISE policy/certs, FMC access policies,
+  C9800 WLAN security, and whether telemetry lands in Splunk) across six domains —
+  management-plane hardening, identity/NAC, segmentation (ACL/TrustSec/zones), secure
+  transport, logging, resilience — and returns a prioritised findings report + per-
+  device-group remediation briefs. Advisory only; never changes config — the main
+  session fans its briefs back to the specialists above.
 
 The flow: the main session asks the architect to design and build (spec-first
 via `build_lab_from_spec`, whose report includes ready-made briefs), then fans

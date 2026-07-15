@@ -8,6 +8,12 @@ See [Enforcement proof](#enforcement-proof).
 Goal: **ISE assigns an SGT at MAB → the IP→SGT binding reaches the FTD → the FTD enforces an
 SGT-based access-control policy** (permit Employees / deny Contractors to the server).
 
+**Topology-as-code:** [`topology.yaml`](topology.yaml) rebuilds the whole topology in one
+`build_lab_from_spec` call; feature config then follows this runbook +
+[`modules/pxgrid-gui-workflow.md`](modules/pxgrid-gui-workflow.md). (The spec captures the
+NAC-core switch config + FMC/FTD day-0; the switch SGT-tier bits and all FMC-side config are
+applied from here — see the header comment in the spec.)
+
 ## The critical finding (read this first)
 
 **A direct switch→FTD `cts sxp` peer (FMC FlexConfig) feeds the FTD's LINA data plane ONLY.

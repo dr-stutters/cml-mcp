@@ -33,6 +33,7 @@ captures designs **we build and validate ourselves** in CML, written up as
 |---|---|---|---|
 | [ISE NAC Lab](ISE%20NAC%20Lab/) | [runbook.md](ISE%20NAC%20Lab/runbook.md) + 4 modules | ✅ validated (ISE 3.4/3.5, cat9000v) | ise-engineer, catalyst-engineer, windows-engineer |
 | [Wireless NAC](Wireless%20NAC/) | [runbook.md](Wireless%20NAC/runbook.md) | ✅ validated (cat9800 17.18 + hostapd → ISE 3.5) | wireless-engineer, ise-engineer |
+| [Firepower SGT Enforcement](Firepower%20SGT%20Enforcement/) | [runbook.md](Firepower%20SGT%20Enforcement/runbook.md) + [pxGrid GUI module](Firepower%20SGT%20Enforcement/modules/pxgrid-gui-workflow.md) + [topology.yaml](Firepower%20SGT%20Enforcement/topology.yaml) | ✅ validated (ISE 3.5 SGT → FMC/FTD Snort via pxGrid, permit/deny proven) | ise-engineer, firewall-engineer, catalyst-engineer |
 
 **Reusable components** — building blocks the end-to-end
 [Firewall SD-WAN](../Cisco%20Validated%20Designs/Firewall%20SD-WAN/runbook.md) CVD

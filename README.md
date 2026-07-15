@@ -370,9 +370,11 @@ validated lab builds: one subfolder per design, each with a repeatable
 gotchas) and, where captured, a **`topology.yaml`** lab spec so the whole
 topology rebuilds with one `build_lab_from_spec` call. Full designs so far:
 **ISE NAC Lab** (MAB / PEAP / EAP-TLS / TrustSec / CoA / CTS against ISE
-3.4+3.5) and **Wireless NAC** (C9800 config path + live hostapd 802.1X), plus
-six reusable FMC/FTD component runbooks — the **Firewall SD-WAN** CVD also has
-a captured `topology.yaml`. See the library's
+3.4+3.5), **Wireless NAC** (C9800 config path + live hostapd 802.1X), and
+**Firepower SGT Enforcement** (FMC-managed FTD Snort enforces an ISE SGT via
+pxGrid — permit/deny proven end-to-end), plus six reusable FMC/FTD component
+runbooks. Captured `topology.yaml` specs so far: ISE NAC Lab, Wireless NAC,
+Firepower SGT Enforcement, and the **Firewall SD-WAN** CVD. See the library's
 [README](Custom%20Designs/README.md).
 
 ## Tool reference

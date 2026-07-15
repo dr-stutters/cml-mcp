@@ -387,6 +387,15 @@ document counterpart to the `tests/` suites: the code *executes* the tests, the 
 customer-facing test report (roadmap) fills in. See the library's
 [README](Test%20Plans/README.md).
 
+### Test Reports library
+
+[`Test Reports/`](Test%20Reports/) is the results side: dated, customer-facing **test
+reports** that record what a given run produced (verdict, per-server/-design results,
+evidence). `run_report.py` executes the automated gate (`ruff` + `pytest`, plus live
+`smoke`/`integration` with flags) across all six repos and emits `results.json`; the
+report curates that plus the lab-design proofs. The latest run
+([2026-07-15](Test%20Reports/2026-07-15/report.md)): **134/134 unit, lint clean, PASS**.
+
 ## Tool reference
 
 ### Topology-as-code

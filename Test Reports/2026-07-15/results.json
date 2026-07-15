@@ -1,0 +1,147 @@
+{
+  "generated": "2026-07-15T08:53:47+00:00",
+  "host_base": "/home/reptar/MCP",
+  "levels": {
+    "offline": true,
+    "smoke": false,
+    "write": false
+  },
+  "repos": [
+    {
+      "name": "cml-mcp",
+      "plan": "CML",
+      "dir": "CML_MCP",
+      "ruff": {
+        "rc": 0,
+        "passed": true,
+        "tail": [
+          "All checks passed!"
+        ]
+      },
+      "unit": {
+        "rc": 0,
+        "passed": 33,
+        "failed": 0,
+        "skipped": 0,
+        "ok": true,
+        "tail": [
+          "33 passed in 0.74s"
+        ]
+      }
+    },
+    {
+      "name": "ise-mcp",
+      "plan": "ISE",
+      "dir": "ISE_MCP",
+      "ruff": {
+        "rc": 0,
+        "passed": true,
+        "tail": [
+          "warning: `VIRTUAL_ENV=/home/reptar/MCP/CML_MCP/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+        ]
+      },
+      "unit": {
+        "rc": 0,
+        "passed": 49,
+        "failed": 0,
+        "skipped": 0,
+        "ok": true,
+        "tail": [
+          "warning: `VIRTUAL_ENV=/home/reptar/MCP/CML_MCP/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+        ]
+      }
+    },
+    {
+      "name": "firepower-mcp",
+      "plan": "FMC",
+      "dir": "Firepower_MCP",
+      "ruff": {
+        "rc": 0,
+        "passed": true,
+        "tail": [
+          "warning: `VIRTUAL_ENV=/home/reptar/MCP/CML_MCP/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+        ]
+      },
+      "unit": {
+        "rc": 0,
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0,
+        "ok": true,
+        "tail": [
+          "warning: `VIRTUAL_ENV=/home/reptar/MCP/CML_MCP/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+        ]
+      }
+    },
+    {
+      "name": "windows-mcp",
+      "plan": "WIN",
+      "dir": "Windows_MCP",
+      "ruff": {
+        "rc": 0,
+        "passed": true,
+        "tail": [
+          "warning: `VIRTUAL_ENV=/home/reptar/MCP/CML_MCP/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+        ]
+      },
+      "unit": {
+        "rc": 0,
+        "passed": 15,
+        "failed": 0,
+        "skipped": 0,
+        "ok": true,
+        "tail": [
+          "warning: `VIRTUAL_ENV=/home/reptar/MCP/CML_MCP/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+        ]
+      }
+    },
+    {
+      "name": "splunk-mcp",
+      "plan": "SPL",
+      "dir": "Splunk_MCP",
+      "ruff": {
+        "rc": 0,
+        "passed": true,
+        "tail": [
+          "warning: `VIRTUAL_ENV=/home/reptar/MCP/CML_MCP/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+        ]
+      },
+      "unit": {
+        "rc": 0,
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0,
+        "ok": true,
+        "tail": [
+          "warning: `VIRTUAL_ENV=/home/reptar/MCP/CML_MCP/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+        ]
+      }
+    },
+    {
+      "name": "wlc-mcp",
+      "plan": "WLC",
+      "dir": "WLC_MCP",
+      "ruff": {
+        "rc": 0,
+        "passed": true,
+        "tail": [
+          "warning: `VIRTUAL_ENV=/home/reptar/MCP/CML_MCP/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+        ]
+      },
+      "unit": {
+        "rc": 0,
+        "passed": 10,
+        "failed": 0,
+        "skipped": 0,
+        "ok": true,
+        "tail": [
+          "warning: `VIRTUAL_ENV=/home/reptar/MCP/CML_MCP/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead"
+        ]
+      }
+    }
+  ],
+  "totals": {
+    "unit_passed": 134,
+    "unit_failed": 0
+  }
+}

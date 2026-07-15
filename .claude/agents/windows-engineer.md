@@ -34,6 +34,9 @@ addressing, and tasks. If the brief names a design (e.g. the ISE NAC lab), read
 
 ## Common workflows
 
+> Full validated foundation build (rename → promote → DNS → enterprise CA → verify, with
+> the four hard-won gotchas): [`Custom Designs/Windows DC Foundation/runbook.md`](../../Custom%20Designs/Windows%20DC%20Foundation/runbook.md).
+
 **Stand up a domain.** FIRST rename the box to something meaningful
 (`win_rename_computer('AD01')`, reboots) - renaming a DC *after* promotion is far
 more involved, so always do it before. Once it's back:
@@ -41,8 +44,11 @@ more involved, so always do it before. Once it's back:
 `win_promote_to_dc(domain_name='lab.local', safe_mode_password=...)`. The promotion
 reboots the box, and while it's mid-promotion/pre-reboot **neither the local nor
 the domain Administrator can WinRM-auth** (local SAM decommissioned, AD not up yet)
-- let it auto-reboot (the tool does; don't pass -NoRebootOnCompletion), wait, then
-log back in as **DOMAIN\Administrator** (same password) and check
+- let it auto-reboot (the tool does; don't pass -NoRebootOnCompletion) and wait. For
+~1 min *after* the reboot WinRM auth keeps failing while AD DS/Netlogon initialise, then
+recovers - **wait and retry, don't switch creds.** The same unqualified `Administrator`
+(`WINRM_USERNAME`) resolves to the *domain* Administrator on a DC (validated 2026-07-15),
+so you do NOT need to change it to `DOMAIN\Administrator`. Then check
 `win_ad_domain_info`. Then create OUs/groups/users (`win_create_ad_ou`,
 `win_create_ad_group`, `win_create_ad_user`).
 

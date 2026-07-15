@@ -212,6 +212,15 @@ uv run playwright install chromium
 | `CML_VERIFY_SSL` | `false` | Verify the TLS certificate (CML ships self-signed) |
 | `CML_TIMEOUT` | `60` | API request timeout in seconds |
 
+**Suite-wide secrets (optional).** When cml-mcp runs alongside its companion MCPs
+(Firepower, ISE, Windows, Splunk, WLC) under one parent directory, every server also
+reads a shared `../.env` one level above the repos — so lab credentials can live in a
+single file instead of one per repo. Resolution order per variable is **process env →
+this repo's `.env` → the shared `../.env`** (first match wins, so a repo's own `.env`
+overrides the shared one, and a standalone checkout stays self-contained). The
+aggregated [`.env.example`](.env.example) already lists every server's variables — copy
+it to `../.env` for suite-wide config, or a block into a single repo's `.env`.
+
 Authentication is automatic: the server obtains a JWT on first use and
 re-authenticates transparently when the token expires. Credentials never
 leave the machine the server runs on.

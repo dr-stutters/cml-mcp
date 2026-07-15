@@ -14,6 +14,8 @@ SGT-based access-control policy** (permit Employees / deny Contractors to the se
 NAC-core switch config + FMC/FTD day-0; the switch SGT-tier bits and all FMC-side config are
 applied from here — see the header comment in the spec.)
 
+**Test plan:** [`Test Plans/Lab Designs/firepower-sgt-enforcement.md`](../../Test%20Plans/Lab%20Designs/firepower-sgt-enforcement.md) — formal acceptance cases (`SGT-*`) + pass/fail criteria.
+
 ## The critical finding (read this first)
 
 **A direct switch→FTD `cts sxp` peer (FMC FlexConfig) feeds the FTD's LINA data plane ONLY.

@@ -1,5 +1,7 @@
 # ISE NAC Lab — end-to-end runbook
 
+> **Test plan:** [`Test Plans/Lab Designs/ise-nac-lab.md`](../../Test%20Plans/Lab%20Designs/ise-nac-lab.md) — formal acceptance cases (`NAC-*`) + pass/fail criteria.
+
 A repeatable build of a full **Cisco ISE Network Access Control** lab in CML: a
 Catalyst 9000v access switch (the NAD) authenticating an endpoint against ISE by
 **MAB, PEAP-MSCHAPv2 (against AD), and EAP-TLS**, then layering on **dynamic

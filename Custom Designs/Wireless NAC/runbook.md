@@ -1,5 +1,7 @@
 # Wireless NAC Lab — end-to-end runbook
 
+> **Test plan:** [`Test Plans/Lab Designs/wireless-nac.md`](../../Test%20Plans/Lab%20Designs/wireless-nac.md) — formal acceptance cases (`WLNAC-*`) + pass/fail criteria.
+
 A repeatable build of **wireless 802.1X Network Access Control** against Cisco ISE
 in CML. Because of a hard CML constraint (below), wireless NAC splits into **two
 real-but-separate paths**, both validated:

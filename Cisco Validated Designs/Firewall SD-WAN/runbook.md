@@ -1,5 +1,7 @@
 # Firewall SD-WAN — build runbook
 
+> **Test plan:** [`Test Plans/Lab Designs/firewall-sdwan.md`](../../Test%20Plans/Lab%20Designs/firewall-sdwan.md) — formal acceptance cases (`SDWAN-*`) + pass/fail criteria.
+
 The repeatable, as-built companion to [design-brief.md](design-brief.md). Where the
 brief is the distilled *reference design*, this is the **step-by-step build** that
 was validated end-to-end in CML (FMCv managing FTDv, driven via the **FMC REST

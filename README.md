@@ -377,6 +377,16 @@ runbooks. Captured `topology.yaml` specs so far: ISE NAC Lab, Wireless NAC,
 Firepower SGT Enforcement, and the **Firewall SD-WAN** CVD. See the library's
 [README](Custom%20Designs/README.md).
 
+### Test Plans library
+
+[`Test Plans/`](Test%20Plans/) holds formal, customer-presentable **test plans** — one
+per MCP server (6) and one per validated lab design (4) — enumerating test cases
+(objective · steps · expected/pass criteria · **automation coverage**). They're the
+document counterpart to the `tests/` suites: the code *executes* the tests, the plans
+*describe* them. Each plan ends with an empty execution-record table that the
+customer-facing test report (roadmap) fills in. See the library's
+[README](Test%20Plans/README.md).
+
 ## Tool reference
 
 ### Topology-as-code

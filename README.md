@@ -177,6 +177,28 @@ the **Cisco Catalyst 9800** WLC over **RESTCONF** (IOS-XE YANG).
 Clone it alongside this repo (`../WLC_MCP`) to enable the `wlc` server, or use it
 entirely on its own — see its [README](https://github.com/dr-stutters/wlc-mcp).
 
+## Companion server: Catalyst Center MCP
+
+**[catalyst-center-mcp](https://github.com/dr-stutters/catalyst-center-mcp)** is a
+separate, independently usable MCP server for **Cisco Catalyst Center** (formerly DNA
+Center) — the on-prem campus / SD-Access controller — via its **Intent API**
+(`/dna/intent/api/v1/…`, token auth).
+
+- **~18 tools** — reachability/version, **device inventory** (list/get/by-ip/interfaces),
+  **site hierarchy**, **Assurance health** (network/device/client/site) + issues, a
+  read-only **command runner** (`show` commands on managed devices), task polling, plus a
+  `catc_api_call` escape hatch. Most writes + the command runner are **async** (return a
+  `taskId` to poll).
+- **Wired in here** — registered as the `catc` server in [.mcp.json](.mcp.json) (it runs
+  the sibling repo at `../catalyst-center-mcp`), and the **catalyst-center-engineer** agent
+  uses its `mcp__catc__*` tools. Catalyst Center is usually an external appliance, not a CML
+  node. Set the `CATC_*` credentials as env vars or in `../catalyst-center-mcp/.env` (or the
+  shared `../.env`).
+
+Clone it alongside this repo (`../catalyst-center-mcp`) to enable the `catc` server, or use
+it entirely on its own — see its
+[README](https://github.com/dr-stutters/catalyst-center-mcp).
+
 ## Requirements
 
 - Python 3.11+ and [uv](https://docs.astral.sh/uv/)

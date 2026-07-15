@@ -28,6 +28,10 @@
     "wlc": {
       "command": "uv",
       "args": ["run", "--directory", "../WLC_MCP", "wlc-mcp"]
+    },
+    "catc": {
+      "command": "uv",
+      "args": ["run", "--directory", "../catalyst-center-mcp", "catalyst-center-mcp"]
     }
   }
 }

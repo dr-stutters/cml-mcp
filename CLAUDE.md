@@ -69,6 +69,16 @@ the `wlc` server still manages its full config; live wireless 802.1X in CML is d
 separately via the hostapd AP + wpa_supplicant client (real EAP over the shared
 `airduct`/hwsim RF medium, hostapd as the RADIUS authenticator to ISE).
 
+**Companion Catalyst Center MCP:** the `catc` server (registered in `.mcp.json`, source
+in the sibling repo `../catalyst-center-mcp`) wraps **Cisco Catalyst Center** (formerly
+DNA Center) - the on-prem campus / SD-Access controller - via its **Intent API** (token
+auth, `/dna/intent/api/v1/…`). The catalyst-center-engineer agent uses its `mcp__catc__*`
+tools (reachability/version, device inventory, site hierarchy, Assurance health/issues,
+read-only command-runner `show` commands, task polling, + a `catc_api_call` escape hatch)
+instead of raw httpx. Catalyst Center is usually an external appliance, not a CML node;
+most writes + the command runner are **async** (return a `taskId` to poll). Set its
+`CATC_*` creds as env vars or in `../catalyst-center-mcp/.env` (or the shared `../.env`).
+
 ## Orchestrating lab work with the specialist agents
 
 This repo ships Claude Code agents in `.claude/agents/`:
@@ -98,6 +108,11 @@ This repo ships Claude Code agents in `.claude/agents/`:
   tags) over RESTCONF via the `mcp__wlc__*` tools, and drives live wireless 802.1X
   to ISE using CML's hostapd AP + wpa_supplicant client (hostapd ≠ CAPWAP, so the
   controller and the live client are two separate paths in CML).
+- **catalyst-center-engineer** - campus / SD-Access controller specialist for Cisco
+  Catalyst Center (formerly DNA Center): reads device inventory, the site hierarchy, and
+  Assurance health/issues; runs read-only `show` commands on managed devices via the
+  command runner; and reaches any Intent-API endpoint through the escape hatch - via the
+  `mcp__catc__*` tools. Catalyst Center is usually an external appliance, not a CML node.
 - **secure-by-design** - security-architecture specialist that runs a **READ-ONLY**
   secure-by-design review across the built lab + stack (device running-configs, ISE
   policy/certs, FMC access-control policies, C9800 WLAN security, and whether

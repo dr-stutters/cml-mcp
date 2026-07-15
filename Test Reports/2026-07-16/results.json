@@ -1,0 +1,868 @@
+[
+ {
+  "tool": "catc_spec_tags",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.0
+ },
+ {
+  "tool": "catc_search_spec",
+  "args": {
+   "query": "path trace",
+   "method": "POST"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.0
+ },
+ {
+  "tool": "catc_create_area",
+  "args": {
+   "name": "OVN-Area",
+   "parent_id": "2fc7ff5c-c456-45d1-a818-f027e1517d43"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 1.3
+ },
+ {
+  "tool": "catc_list_sites",
+  "args": {
+   "name": "Global/OVN-Area"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.4
+ },
+ {
+  "tool": "catc_create_building",
+  "args": {
+   "name": "OVN-Bldg",
+   "parent_id": "4f726f01-2eab-411b-bc4c-2a64e59000fa",
+   "country": "Canada",
+   "address": "Ottawa, ON, Canada",
+   "latitude": 45.42,
+   "longitude": -75.69
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.4
+ },
+ {
+  "tool": "catc_list_sites",
+  "args": {
+   "name": "Global/OVN-Area/OVN-Bldg"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.4
+ },
+ {
+  "tool": "catc_create_floor",
+  "args": {
+   "name": "OVN-Floor-1",
+   "parent_id": "aa0866c0-dc39-463b-82bc-28a900a7516b"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.3
+ },
+ {
+  "tool": "catc_list_sites",
+  "args": {
+   "name": "Global/OVN-Area/OVN-Bldg/OVN-Floor-1"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.5
+ },
+ {
+  "tool": "catc_delete_site_element",
+  "args": {
+   "site_id": "1fd46773-0aae-4207-841d-541b7cf4b79f",
+   "site_type": "floor"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.4
+ },
+ {
+  "tool": "catc_delete_site_element",
+  "args": {
+   "site_id": "aa0866c0-dc39-463b-82bc-28a900a7516b",
+   "site_type": "building"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.4
+ },
+ {
+  "tool": "catc_delete_site_element",
+  "args": {
+   "site_id": "4f726f01-2eab-411b-bc4c-2a64e59000fa",
+   "site_type": "area"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.4
+ },
+ {
+  "tool": "catc_create_cli_credential",
+  "args": {
+   "description": "OVN-cli",
+   "username": "ovnuser"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.4
+ },
+ {
+  "tool": "catc_create_snmp_read_credential",
+  "args": {
+   "description": "OVN-snmp-ro",
+   "read_community": "ovn-public"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_list_global_credentials",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_delete_global_credential",
+  "args": {
+   "credential_id": "5390988d-be59-4eb5-9f7a-e94a86bb53fe"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.3
+ },
+ {
+  "tool": "catc_delete_global_credential",
+  "args": {
+   "credential_id": "012b46b2-519f-454e-a3eb-218990bcd9d5"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_create_global_pool",
+  "args": {
+   "name": "OVN-Pool",
+   "cidr": "172.31.255.0/24",
+   "gateway": "172.31.255.1"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.5
+ },
+ {
+  "tool": "catc_list_global_pools",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_delete_global_pool",
+  "args": {
+   "pool_id": "074b2a7b-071b-48ca-8f83-bad202c1ee2f"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.5
+ },
+ {
+  "tool": "catc_create_template_project",
+  "args": {
+   "name": "OVN-Project"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.3
+ },
+ {
+  "tool": "catc_list_template_projects",
+  "args": {
+   "name": "OVN-Project"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_create_template",
+  "args": {
+   "project_id": "9ae7e5fe-146c-493b-be79-934e3377cf1d",
+   "name": "OVN-Banner",
+   "template_content": "banner motd ^OVN test $\\{msg\\} banner^",
+   "device_family": "Routers"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.4
+ },
+ {
+  "tool": "catc_list_template_projects",
+  "args": {
+   "name": "OVN-Project"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_commit_template",
+  "args": {
+   "template_id": "b1de6c2d-93ad-4bf2-b96f-9a825235eb5c",
+   "comments": "ovn v1"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.5
+ },
+ {
+  "tool": "catc_get_template",
+  "args": {
+   "template_id": "b1de6c2d-93ad-4bf2-b96f-9a825235eb5c"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_delete_template",
+  "args": {
+   "template_id": "b1de6c2d-93ad-4bf2-b96f-9a825235eb5c"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.4
+ },
+ {
+  "tool": "catc_delete_template_project",
+  "args": {
+   "project_id": "9ae7e5fe-146c-493b-be79-934e3377cf1d"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_create_tag",
+  "args": {
+   "name": "OVN-Tag"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_list_tags",
+  "args": {
+   "name": "OVN-Tag"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_add_tag_members",
+  "args": {
+   "tag_id": "490c639a-678b-43cd-88a6-b74bfe3142c2",
+   "member_ids": [
+    "ad07f805-2436-49ab-8952-15d25f18ddf1"
+   ]
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.3
+ },
+ {
+  "tool": "catc_get_tag_members",
+  "args": {
+   "tag_id": "490c639a-678b-43cd-88a6-b74bfe3142c2"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_remove_tag_member",
+  "args": {
+   "tag_id": "490c639a-678b-43cd-88a6-b74bfe3142c2",
+   "member_id": "ad07f805-2436-49ab-8952-15d25f18ddf1"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_delete_tag",
+  "args": {
+   "tag_id": "490c639a-678b-43cd-88a6-b74bfe3142c2"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.3
+ },
+ {
+  "tool": "catc_physical_topology",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_site_topology",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_vlan_names",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_l3_topology",
+  "args": {
+   "topology_type": "OSPF"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_list_discoveries",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.3
+ },
+ {
+  "tool": "catc_data_devices",
+  "args": {
+   "hours_ago": 3,
+   "limit": 10
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.8
+ },
+ {
+  "tool": "catc_data_device",
+  "args": {
+   "device_id": "ad07f805-2436-49ab-8952-15d25f18ddf1"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.3
+ },
+ {
+  "tool": "catc_data_device_trend",
+  "args": {
+   "device_id": "ad07f805-2436-49ab-8952-15d25f18ddf1",
+   "hours_ago": 3
+  },
+  "status": "FAIL",
+  "detail": "ToolError: Error executing tool catc_data_device_trend: Catalyst Center API error 400 on POST /dna/data/api/v1/networkDevices/ad07f805-2436-49ab-8952-15d25f18ddf1/trendAnalytics: {\"response\": [{\"errorCode\": 13209, \"message\": \"trendIntervalInMinutes was left empty or an invalid value was given.\", \"detail\": null}], \"version\": \"1.0\"}",
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_data_interfaces",
+  "args": {
+   "network_device_id": "ad07f805-2436-49ab-8952-15d25f18ddf1",
+   "limit": 10
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.3
+ },
+ {
+  "tool": "catc_data_interface",
+  "args": {
+   "interface_id": "74d66235-f95c-4659-9cd7-cbfad3688e74"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_data_clients",
+  "args": {
+   "limit": 5
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_site_health_summaries",
+  "args": {
+   "limit": 10
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.3
+ },
+ {
+  "tool": "catc_site_health_trend",
+  "args": {
+   "hours_ago": 6,
+   "trend_interval": "1HR"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.6
+ },
+ {
+  "tool": "catc_data_issues",
+  "args": {
+   "hours_ago": 24
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_data_events",
+  "args": {
+   "device_family": "Routers",
+   "hours_ago": 6
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_data_event",
+  "args": {
+   "event_id": "--0yZp8BYeph9Ee4EUw9"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_data_network_services",
+  "args": {
+   "service_type": "aaa"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_audit_logs",
+  "args": {
+   "hours_ago": 24,
+   "limit": 5
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_start_discovery",
+  "args": {
+   "name": "OVN-Discover-R2",
+   "ip_address_list": "198.18.128.63",
+   "discovery_type": "Range",
+   "username": "cisco",
+   "snmp_ro_community": "public"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 26.4
+ },
+ {
+  "tool": "catc_get_discovery",
+  "args": {
+   "discovery_id": "8"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_discovery_devices",
+  "args": {
+   "discovery_id": "8"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.4
+ },
+ {
+  "tool": "catc_device_by_ip",
+  "args": {
+   "management_ip": "198.18.128.63"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_assign_devices_to_site",
+  "args": {
+   "site_id": "9a63a774-e71e-46d4-9e66-6fa2e121e964",
+   "device_ids": [
+    "a5f59a36-adc1-4c8a-bc9a-03371f9171a2"
+   ]
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.4
+ },
+ {
+  "tool": "catc_api_call",
+  "args": {
+   "method": "PUT",
+   "path": "/dna/intent/api/v1/network-device/sync",
+   "params": {
+    "forceSync": true
+   },
+   "json_body": [
+    "ad07f805-2436-49ab-8952-15d25f18ddf1",
+    "33f2299a-ec13-4703-b5e1-e649d5413789"
+   ]
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_physical_topology",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.4
+ },
+ {
+  "tool": "catc_start_path_trace",
+  "args": {
+   "source_ip": "10.0.0.1",
+   "dest_ip": "10.0.0.2",
+   "timeout": 120
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 4.8
+ },
+ {
+  "tool": "catc_run_compliance",
+  "args": {
+   "device_ids": [
+    "ad07f805-2436-49ab-8952-15d25f18ddf1",
+    "33f2299a-ec13-4703-b5e1-e649d5413789"
+   ],
+   "full_check": true
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 5.3
+ },
+ {
+  "tool": "catc_compliance_summary",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_compliance_detail",
+  "args": {
+   "device_id": "ad07f805-2436-49ab-8952-15d25f18ddf1"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_device_compliance_policies",
+  "args": {
+   "device_id": "ad07f805-2436-49ab-8952-15d25f18ddf1"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_list_images",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_image_family_identifiers",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_site_image_summary",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_pnp_devices",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_pnp_settings",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_license_summary",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.5
+ },
+ {
+  "tool": "catc_device_license",
+  "args": {
+   "device_id": "ad07f805-2436-49ab-8952-15d25f18ddf1"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_smart_accounts",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_device_config",
+  "args": {
+   "device_id": "ad07f805-2436-49ab-8952-15d25f18ddf1"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_export_device_configs",
+  "args": {
+   "device_ids": [
+    "ad07f805-2436-49ab-8952-15d25f18ddf1"
+   ]
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.5
+ },
+ {
+  "tool": "catc_eox_summary",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_device_eox",
+  "args": {
+   "device_id": "ad07f805-2436-49ab-8952-15d25f18ddf1"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_security_advisories",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_device_modules",
+  "args": {
+   "device_id": "ad07f805-2436-49ab-8952-15d25f18ddf1"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_fabric_sites",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.5
+ },
+ {
+  "tool": "catc_fabric_zones",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_transit_networks",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_layer3_virtual_networks",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_layer2_virtual_networks",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_anycast_gateways",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_port_assignments",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_fabric_summary",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.6
+ },
+ {
+  "tool": "catc_fabric_health",
+  "args": {
+   "kind": "site"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_list_ssids",
+  "args": {
+   "site_id": "2fc7ff5c-c456-45d1-a818-f027e1517d43"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_wireless_profiles",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_rf_profiles",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_ap_profiles",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_wireless_interfaces",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_create_ssid",
+  "args": {
+   "site_id": "2fc7ff5c-c456-45d1-a818-f027e1517d43",
+   "ssid_name": "OVN-SSID",
+   "auth_type": "OPEN"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 2.5
+ },
+ {
+  "tool": "catc_list_ssids",
+  "args": {
+   "site_id": "2fc7ff5c-c456-45d1-a818-f027e1517d43"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.2
+ },
+ {
+  "tool": "catc_delete_ssid",
+  "args": {
+   "site_id": "2fc7ff5c-c456-45d1-a818-f027e1517d43",
+   "ssid_id": "mda4t1zo-lvnt-surp-mfyX-tJiTm1m0uZvjnKq3tZHwou4Xmc0X"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.5
+ },
+ {
+  "tool": "catc_create_wireless_profile",
+  "args": {
+   "name": "OVN-WProfile"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.4
+ },
+ {
+  "tool": "catc_wireless_profiles",
+  "args": {},
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.1
+ },
+ {
+  "tool": "catc_delete_wireless_profile",
+  "args": {
+   "profile_id": "35cf94b3-dd5f-4174-8b0a-80d0b42dbb31"
+  },
+  "status": "PASS",
+  "detail": null,
+  "secs": 0.3
+ }
+]

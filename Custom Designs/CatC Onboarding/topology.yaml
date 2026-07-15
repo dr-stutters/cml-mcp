@@ -1,0 +1,156 @@
+# CatC Onboarding — topology-as-code (build_lab_from_spec)
+#
+# Clean day-0 INTENT, not the runtime state export. Catalyst Center pushes extra
+# config on management (a DNAC-CA trustpoint, a syslog/SNMP-trap destination to
+# itself, a large `snmp-server enable traps` block) — that is NOT reproduced here;
+# it reappears automatically the moment CatC manages the devices again.
+#
+# GOTCHA baked into the runbook (NOT expressible in day-0): the two cat8000v
+# routers boot with `ip ssh version 2` but NO usable host key, so SSH stays
+# disabled until an EXEC-mode `crypto key generate rsa modulus 4096` (>=3072 bits)
+# is run post-boot. The cat9000v self-generates a key and needs no such step.
+# Run that key-gen (see runbook Stage 2) before CatC discovery or SSH probing fails.
+version: 1
+lab:
+  title: CatC-Onboarding
+  description: >-
+    Two cat8000v routers + one cat9000v switch onboarded into Cisco Catalyst
+    Center (198.18.128.5) via SSH/SNMP discovery, with an OSPF area-0 fabric
+    over routed /30s so topology + path-trace have real adjacencies. Mgmt on the
+    198.18.128.0/18 underlay through a System Bridge external connector.
+defaults:
+  definition: cat8000v
+nodes:
+
+  CAT8K-R1:
+    x: 100
+    y: 350
+    config: |
+      hostname CAT8K-R1
+      ip domain name lab.local
+      enable secret cisco
+      username cisco privilege 15 secret cisco
+      ip ssh version 2
+      cdp run
+      interface Loopback0
+       ip address 10.0.0.1 255.255.255.255
+       ip ospf 1 area 0
+      interface GigabitEthernet1
+       description MGMT to CatC /18
+       ip address 198.18.128.61 255.255.192.0
+       no shutdown
+      interface GigabitEthernet2
+       description P2P to CAT9K-SW1 Gi1/0/1
+       ip address 10.10.12.1 255.255.255.252
+       ip ospf 1 area 0
+       cdp enable
+       no shutdown
+      router ospf 1
+       router-id 10.0.0.1
+      ip route 0.0.0.0 0.0.0.0 198.18.128.1
+      snmp-server community public RO
+      snmp-server location CML-CatC-Lab
+      line vty 0 4
+       login local
+       transport input ssh
+      end
+
+  CAT8K-R2:
+    x: 100
+    y: 500
+    config: |
+      hostname CAT8K-R2
+      ip domain name lab.local
+      enable secret cisco
+      username cisco privilege 15 secret cisco
+      ip ssh version 2
+      cdp run
+      interface Loopback0
+       ip address 10.0.0.2 255.255.255.255
+       ip ospf 1 area 0
+      interface GigabitEthernet1
+       description MGMT to CatC /18
+       ip address 198.18.128.63 255.255.192.0
+       no shutdown
+      interface GigabitEthernet2
+       description P2P to CAT9K-SW1 Gi1/0/2
+       ip address 10.10.13.1 255.255.255.252
+       ip ospf 1 area 0
+       cdp enable
+       no shutdown
+      router ospf 1
+       router-id 10.0.0.2
+      ip route 0.0.0.0 0.0.0.0 198.18.128.1
+      snmp-server community public RO
+      snmp-server location CML-CatC-Lab
+      line vty 0 4
+       login local
+       transport input ssh
+      end
+
+  CAT9K-SW1:
+    definition: cat9000v-uadp
+    x: 100
+    y: 100
+    config_files:
+    - name: iosxe_config.txt
+      content: |
+        hostname CAT9K-SW1
+        ip domain name lab.local
+        enable secret cisco
+        username cisco privilege 15 secret cisco
+        ip ssh version 2
+        ip routing
+        switch 1 provision c9kv-uadp-8p
+        vrf definition Mgmt-vrf
+         address-family ipv4
+         exit-address-family
+        interface Loopback0
+         ip address 10.0.0.3 255.255.255.255
+         ip ospf 1 area 0
+        interface GigabitEthernet0/0
+         description OOB MGMT to CatC /18 (Mgmt-vrf)
+         vrf forwarding Mgmt-vrf
+         ip address 198.18.128.62 255.255.192.0
+         no shutdown
+        interface GigabitEthernet1/0/1
+         description P2P to CAT8K-R1 Gi2
+         no switchport
+         ip address 10.10.12.2 255.255.255.252
+         ip ospf 1 area 0
+        interface GigabitEthernet1/0/2
+         description P2P to CAT8K-R2 Gi2
+         no switchport
+         ip address 10.10.13.2 255.255.255.252
+         ip ospf 1 area 0
+        router ospf 1
+         router-id 10.0.0.3
+        ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 198.18.128.1
+        snmp-server community public RO
+        snmp-server location CML-CatC-Lab
+        line vty 0 4
+         login local
+         transport input ssh
+        end
+
+  MGMT-SW:
+    definition: unmanaged_switch
+    config: 'mode: Bridge'
+    x: 400
+    y: 225
+
+  EXT:
+    definition: external_connector
+    config: System Bridge
+    x: 650
+    y: 225
+
+links:
+# management plane: each device's mgmt NIC -> unmanaged switch -> System Bridge -> /18
+- EXT:port -- MGMT-SW:port0
+- MGMT-SW:port1 -- CAT8K-R1:GigabitEthernet1
+- MGMT-SW:port2 -- CAT9K-SW1:GigabitEthernet0/0
+- MGMT-SW:port3 -- CAT8K-R2:GigabitEthernet1
+# routed fabric: OSPF area 0 over /30s (gives topology/path-trace real adjacencies)
+- CAT8K-R1:GigabitEthernet2 -- CAT9K-SW1:GigabitEthernet1/0/1
+- CAT8K-R2:GigabitEthernet2 -- CAT9K-SW1:GigabitEthernet1/0/2

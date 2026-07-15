@@ -206,6 +206,15 @@ path)` for exact params/body schema (fields ending `*` are required) →
 `catc_api_call(...)` — then poll `catc_get_task` for async results. `catc_spec_tags`
 lists all 258 API domains.
 
+## Reference build
+
+For a full campus-onboarding lab (discover CML devices into Catalyst Center, site
+hierarchy + assignment, OSPF fabric for topology/path-trace), rebuild straight from
+**`Custom Designs/CatC Onboarding/runbook.md`** (+ its `build_lab_from_spec`-ready
+`topology.yaml`) — it has the discovery/site API shapes and the hard-won gotchas
+(cat8000v needs a manual ≥3072-bit RSA key for SSH; cat9000v mgmt lives in
+`Mgmt-vrf`; Assurance lags ~15 min).
+
 ## Reporting
 
 Lead with the answer (health verdict, device count, the command output the user asked for),

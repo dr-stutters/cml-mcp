@@ -4,6 +4,14 @@ MCP server for Cisco Modeling Labs (Python 3.11+, uv, FastMCP, httpx, pyATS).
 Source in `src/cml_mcp/`; live-server tests in `tests/` (both create and
 delete their own scratch labs). Config comes from `.env` (never commit it).
 
+**Shared secrets across the suite:** every companion MCP below reads a shared
+`../.env` (one level above the repos, i.e. the parent of all six checkouts) as a
+base, so lab credentials can live in ONE file instead of six. Precedence, highest
+first: process env > that repo's own `.env` > the shared `../.env`. The full
+template (all six servers' variables) is [`.env.example`](.env.example) - copy it to
+`../.env` for suite-wide config, or a block into a single repo's `.env`. All six
+repos gitignore `.env`; never commit one.
+
 **Companion Firepower MCP:** the `fmc` server (registered in `.mcp.json`, source
 in the sibling repo `../Firepower_MCP`) wraps the FMC REST API - the
 firewall-engineer agent uses its `mcp__fmc__*` tools (spec search, devices,

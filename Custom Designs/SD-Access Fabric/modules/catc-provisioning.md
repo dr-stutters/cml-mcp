@@ -22,12 +22,34 @@ registered to the CP, host reaches its anycast gateway.
 | 2 | **Enable telemetry** (per site) | `PUT /sites/{siteId}/telemetrySettings` `{wiredDataCollection:{enableWiredDataCollection:true}, +4 null}` | else fabric-site create → `NCSO20572` |
 | 3 | **Create fabric site** | `POST /sda/fabricSites` `[{siteId, authenticationProfileName:"No Authentication", isPubSubEnabled:true}]` | → `catc_fabric_sites` returns the `fabricId` |
 | 4 | **Provision devices** | `POST /sda/provisionDevices` `[{networkDeviceId, siteId}...]` | required before a device can take a fabric role |
-| 5 | **Add Control-Plane** | `POST /sda/fabricDevices` `[{networkDeviceId, fabricId, deviceRoles:["CONTROL_PLANE_NODE"]}]` | **CP before Edge** (edge 400s with no CP) |
+| 5 | **Add Control-Plane + Layer-3 Border** | `POST /sda/fabricDevices` `[{networkDeviceId, fabricId, deviceRoles:["CONTROL_PLANE_NODE","BORDER_NODE"], borderDeviceSettings:{borderTypes:["LAYER_3"], layer3Settings:{localAutonomousSystemNumber:"65001", isDefaultExit:true, importExternalRoutes:true, borderPriority:1}}}]` | **CP before Edge** (edge 400s with no CP). **Provision the border role HERE** — a collapsed border+CP is one device; retro-fitting the border later needs a full fabric rebuild (CatC won't update roles in-place, and won't delete the only CP while an edge exists → `NCHS20529`). `borderPriority` must be **1–9** (`10` → `NCHS20300`). |
 | 6 | **Add Edge** | `POST /sda/fabricDevices` `[{... deviceRoles:["EDGE_NODE"]}]` | |
 | 7 | Global pool → reserve sub-pool | `catc_create_global_pool`; then **`POST /reserve-ip-subpool/{siteId}`** `{name,type:"LAN",ipv4GlobalPool:"<cidr>",ipv4Prefix:true,ipv4PrefixLength,ipv4Subnet,ipv4GateWay}` | the reserve **tool** omits `ipv4GlobalPool` → use the raw call |
 | 8 | Create L3 VN + anchor | `catc_create_layer3_virtual_network`; then `PUT /sda/layer3VirtualNetworks` `[{id, virtualNetworkName, fabricIds:[fabricId]}]` | VN must be anchored to the fabric |
 | 9 | Anycast gateway | `POST /sda/anycastGateways` `[{fabricId, virtualNetworkName, ipPoolName, trafficType:"DATA", isCriticalPool:false, isLayer2FloodingEnabled:false, isWirelessPool:false, isIpDirectedBroadcast:false, isIntraSubnetRoutingEnabled:false, isMultipleIpToMacAddresses:false, autoGenerateVlanName:true}]` | note the auto `vlanName` (e.g. `172_16_10_0-CAMPUS_VN`) |
 | 10 | **Static host onboarding** | `POST /sda/portAssignments` `[{fabricId, networkDeviceId:<edge>, interfaceName, connectedDeviceType:"USER_DEVICE", dataVlanName:<from #9>, authenticateTemplateName:"No Authentication"}]` | assigns the edge access port to the VN |
+| 11 | **IP transit** (for handoff) | `POST /sda/transitNetworks` `[{name:"IP_Transit_Fusion", type:"IP_BASED_TRANSIT", ipTransitSettings:{routingProtocolName:"BGP", autonomousSystemNumber:"65000"}}]` | AS = the **external/fusion** side |
+| 12 | **Border L3 handoff (per VN)** | `POST /sda/fabricDevices/layer3Handoffs/ipTransits` `[{networkDeviceId:<border>, fabricId, transitNetworkId:<#11>, interfaceName:"GigabitEthernet1/0/3", virtualNetworkName:"CAMPUS_VN", vlanId:3001, localIpAddress:"10.1.244.1/30", remoteIpAddress:"10.1.244.2/30"}]` | **On cat9000v CatC renders this as an SVI (`Vlan3001`) on a trunk port — NOT a dot1Q subinterface** (the cat9000v has no L3 subinterfaces; this is why the CatC path succeeds where hand-rolled CLI fails). Border BGP `65001` auto-configures `aggregate-address <pool> summary-only` + `redistribute lisp` + neighbor to the remote |
+
+**FUSION (fusion router, e.g. cat8000v) side — the external peer, configured by CLI** (CatC doesn't own the off-fabric router):
+```
+interface GigabitEthernet3.3001
+ encapsulation dot1Q 3001
+ ip address 10.1.244.2 255.255.255.252
+ ip nat inside
+interface GigabitEthernet1                       ! uplink to the real /18
+ ip nat outside
+ip access-list standard NAT-FABRIC
+ permit 172.16.10.0 0.0.0.255                     ! the VN data pool
+ip nat inside source list NAT-FABRIC interface GigabitEthernet1 overload
+router bgp 65000
+ neighbor 10.1.244.1 remote-as 65001
+ address-family ipv4
+  neighbor 10.1.244.1 activate
+  neighbor 10.1.244.1 default-originate           ! hands the fabric a default; border redistributes it → LISP
+ exit-address-family
+```
+Result: border learns `B* 0.0.0.0/0 via 10.1.244.2` (→ redistributed to LISP so edges `use-petr` to the border), FUSION learns `B 172.16.10.0/24 via 10.1.244.1`, and NAT overload lets the VN reach the real /18 (ISE/DC/Splunk/internet). Verified: `ping vrf CAMPUS_VN <ext> source <anycast-gw>` 100%, and an onboarded host → external 100%.
 
 > **GOTCHA — `NCSO20148 "LISP configuration is already present on device … Remove the
 > LISP configuration and retry"`** when adding a fabric role. Cause: CatC's *cached*
@@ -36,11 +58,30 @@ registered to the CP, host reaches its anycast gateway.
 > `[deviceIds]`** and wait for `collectionStatus:Managed` before retrying — CatC then
 > sees the clean config.
 
+> **GOTCHA — CatC config-push to a cat9000v fails after re-provisioning** (seen while
+> re-adding fabric roles / port assignments). Two independent causes, both surfaced as
+> shifting errors (`NCNP10200` auth failure → "unable to push" → `NCNP11000` connection
+> error → `NCIM12018 ERROR-CONNECTION-CLOSED`):
+> 1. **AAA flips vty to RADIUS-first.** Re-provisioning re-applies the Network-AAA
+>    template, making `aaa authentication login VTY_authen` **and** `aaa authorization
+>    exec VTY_author` start with `group dnac-network-radius-group` (ISE). ISE rejects
+>    CatC's CLI login/authz (no device-admin policy), so CatC can't log in / can't reach
+>    priv-15 config mode. **Fix (console, out-of-band):** re-order **both** lines to
+>    **local-first** — `aaa authentication login VTY_authen local group dnac-network-radius-group`
+>    and `aaa authorization exec VTY_author local group dnac-network-radius-group if-authenticated`.
+>    (Wave 4 / TACACS+ device-admin replaces this workaround properly.)
+> 2. **`ip ssh bulk-mode` breaks the push.** CatC uses bulk-mode SSH for config transfer;
+>    the virtual cat9000v's bulk-mode resets the session mid-transfer (`ERROR-CONNECTION-CLOSED`,
+>    `collectionStatus:Partial Collection Failure`). **Fix:** `no ip ssh bulk-mode` on the
+>    device, then `forceSync` to `Managed`. After both fixes the port-assignment push succeeds.
+>    A **failed** `POST /sda/portAssignments` still commits the intent (so a retry 400s
+>    `NCHS20140 "already assigned"`) — DELETE the stale intent, then re-POST.
+
 **Verify** (same as the [CLI module](cli-provisioning.md)): edge `show lisp session`
 (established to the CP); CP `show lisp site` (host `/32` registered); edge
 `show device-tracking database` (host REACHABLE on the access port); host → anycast
-gateway ping. Border L3 handoff (`/sda/fabricDevices/layer3Handoffs/ipTransits`) for
-external reachability is the documented next layer.
+gateway ping. Border L3 handoff (steps 11–12) → `ping vrf <VN> <ext> source <anycast-gw>`
+and an onboarded host → external, both **validated 100% 2026-07-16**.
 
 ### Original blocked flow (pre-install, for reference)
 
@@ -82,7 +123,9 @@ the fabric-write/provisioning application ("ConnectivityDomain") isn't running.
 [
   {"networkDeviceId": "<BORDER-CP id>", "fabricId": "<fabricId>",
    "deviceRoles": ["CONTROL_PLANE_NODE", "BORDER_NODE"],
-   "borderDeviceSettings": { "borderTypes": ["LAYER_3"], "layer3Settings": { ... } }},
+   "borderDeviceSettings": { "borderTypes": ["LAYER_3"], "layer3Settings": {
+     "localAutonomousSystemNumber": "65001", "isDefaultExit": true,
+     "importExternalRoutes": true, "borderPriority": 1 } }},
   {"networkDeviceId": "<EDGE1 id>", "fabricId": "<fabricId>",
    "deviceRoles": ["EDGE_NODE"]}
 ]

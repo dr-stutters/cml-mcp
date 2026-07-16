@@ -215,6 +215,14 @@ hierarchy + assignment, OSPF fabric for topology/path-trace), rebuild straight f
 (cat8000v needs a manual ≥3072-bit RSA key for SSH; cat9000v mgmt lives in
 `Mgmt-vrf`; Assurance lags ~15 min).
 
+For an **SD-Access fabric** (LISP overlay, VN, static host onboarding, no ISE) see
+**`Custom Designs/SD-Access Fabric/runbook.md`** + its `modules/` — the CLI path is
+validated; **CatC-driven SDA provisioning is blocked on the current appliance with
+`NCSP11008` ("No application found for type 'ConnectivityDomain'")**, so the SDA
+*write* endpoints (`/sda/fabricSites`, `/sda/fabricDevices`, …) fail even though the
+SDA *read* tools work. Confirm the SD-Access provisioning service is enabled before
+attempting CatC fabric writes.
+
 ## Reporting
 
 Lead with the answer (health verdict, device count, the command output the user asked for),

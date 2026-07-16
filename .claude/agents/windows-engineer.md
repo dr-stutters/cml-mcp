@@ -36,6 +36,11 @@ addressing, and tasks. If the brief names a design (e.g. the ISE NAC lab), read
 
 > Full validated foundation build (rename → promote → DNS → enterprise CA → verify, with
 > the four hard-won gotchas): [`Custom Designs/Windows DC Foundation/runbook.md`](../../Custom%20Designs/Windows%20DC%20Foundation/runbook.md).
+>
+> This DC also backs the **SD-Access + ISE integration** (`Custom Designs/SD-Access ISE
+> Integration/runbook.md`): AD as ISE's external identity source (demo groups
+> Employees/Contractors/IoT + users), and the **MitchcloudCA** signs ISE's Admin/EAP/pxGrid
+> CSRs (`win_sign_csr`, WebServer template) so CatC↔ISE and 802.1X chain to one root.
 
 **Stand up a domain.** FIRST rename the box to something meaningful
 (`win_rename_computer('AD01')`, reboots) - renaming a DC *after* promotion is far

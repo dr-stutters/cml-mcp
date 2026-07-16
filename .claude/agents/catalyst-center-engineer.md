@@ -229,6 +229,15 @@ host EID registered, host→anycast-GW ping). Key CatC gotchas:
   before adding a fabric role, or CatC's stale cache throws `NCSO20148 "LISP already
   present"`. Full working API sequence: `modules/catc-provisioning.md`.
 
+For the **identity-driven** evolution (fresh ISE → AD → CatC → Closed Auth + TrustSec) see
+**`Custom Designs/SD-Access ISE Integration/runbook.md`** + its `modules/`. CatC-side gotchas:
+register ISE with `POST /authentication-policy-servers` needs a top-level **`port:49`** (else
+`406 NCND00041`); the integration only reaches `ACTIVE`/`TRUSTED` once every ISE cert chains to
+a CA that CatC trusts (import the AD root first); `PUT /sites/{id}/aaaSettings` is **merge-only**
+(can't clear `aaaNetwork`) and setting **Network AAA = ISE** RADIUS-locks device-admin login
+(keep vty local on the switches); a host-port auth-template change 400s **`NCSO20804`** until you
+**re-provision** the device (which is also when the fabric NADs register in ISE).
+
 ## Reporting
 
 Lead with the answer (health verdict, device count, the command output the user asked for),

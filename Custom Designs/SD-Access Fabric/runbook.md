@@ -107,9 +107,11 @@ Diverges by method — pick one:
 
 - **[CLI (validated working)](modules/cli-provisioning.md)** — LISP pub/sub CP on
   BORDER-CP, xTR + anycast SVI on EDGE1, dynamic-EID host detection.
-- **[Catalyst Center (blocked here)](modules/catc-provisioning.md)** — the full
-  Intent-API flow (fabric site → roles → VN → anycast GW → port assignment), which
-  fails at fabric-site creation with **NCSP11008** on this appliance.
+- **[Catalyst Center (validated)](modules/catc-provisioning.md)** — the full
+  Intent-API flow (telemetry → fabric site → provision → CP/Edge roles → IP pool → VN
+  → anycast GW → No-Auth port assignment). Requires the **SD Access app installed**
+  first — see [enabling the SD-Access service](modules/enable-sda-service.md) (the
+  original `NCSP11008` was a missing package, now resolved).
 
 ## Stage 5 — Static host onboarding + verify
 
@@ -143,7 +145,11 @@ Configure HOST1 (alpine — needs **`sudo`**): `ip addr add 172.16.10.10/24 dev 
 5. **Pub/sub LISP syntax** — role enable is `service ipv4`→`map-server`/`map-resolver`,
    not legacy `ipv4 map-server` (CLI module).
 6. **alpine host config needs `sudo`** (Stage 5).
-7. **CatC SDA provisioning blocked (NCSP11008)** on this appliance (CatC module).
+7. **CatC SDA provisioning needs the SD Access app installed** — `NCSP11008` = missing
+   package (not resources); install it, then the full flow works. See
+   [enable-sda-service.md](modules/enable-sda-service.md) + CatC module. Two more:
+   add **Control-Plane before Edge**; **`forceSync`** a device after manual config
+   changes or CatC's stale cache throws `NCSO20148`.
 
 ## Roadmap
 

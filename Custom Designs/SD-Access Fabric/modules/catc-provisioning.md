@@ -8,22 +8,43 @@ module documents the full intended flow, exactly where it blocks, and the workin
 pieces. See [enabling the SD-Access microservice](#enabling-sd-access) for the
 follow-up investigation.
 
-## Flow (Intent API + `catc` tools)
+## Flow (Intent API + `catc` tools) — VALIDATED WORKING 2026-07-16
 
-Discovery + site are **shared** with the [runbook](../runbook.md) Stage 3 and
-**work**; the SDA-specific writes are where it blocks.
+Once the SD Access app is installed ([enable-sda-service.md](enable-sda-service.md)),
+this full sequence provisions a fabric end-to-end (No-Auth static host onboarding, no
+ISE). All steps are async (`taskId` → poll `catc_get_task`; `isError:false` +
+`processcfs_complete=true` = done). Validated: LISP edge↔CP session up, host EID
+registered to the CP, host reaches its anycast gateway.
 
-| # | Step | Tool / endpoint | Result here |
+| # | Step | Endpoint | Notes |
 |---|---|---|---|
-| 1 | Discover devices | `catc_start_discovery` | ✅ 3 Managed (needs unique serials) |
-| 2 | Site hierarchy | `catc_create_area` + `catc_create_building` | ✅ `Global/SDA-Lab/Fabric-Bldg` |
-| 3 | Assign to site | `catc_assign_devices_to_site` | ✅ assigned |
-| 4 | **Create fabric site** | `POST /dna/intent/api/v1/sda/fabricSites` | ❌ **NCSP11008** |
-| 5 | Add fabric devices + roles | `POST /dna/intent/api/v1/sda/fabricDevices` | ⛔ blocked by #4 |
-| 6 | Create L3 VN | `catc_create_layer3_virtual_network` | ⛔ (needs fabric) |
-| 7 | Anycast gateway | `POST /dna/intent/api/v1/sda/anycastGateways` | ⛔ blocked |
-| 8 | Border L3 handoff | `POST /dna/intent/api/v1/sda/fabricDevices/layer3Handoffs/ipTransits` | ⛔ blocked |
-| 9 | Static host onboarding | `POST /dna/intent/api/v1/sda/portAssignments` | ⛔ blocked |
+| 1 | Discover + site + assign | `catc_start_discovery`, `catc_create_area/_building`, `catc_assign_devices_to_site` | see [runbook](../runbook.md) Stage 3 (unique serials!) |
+| 2 | **Enable telemetry** (per site) | `PUT /sites/{siteId}/telemetrySettings` `{wiredDataCollection:{enableWiredDataCollection:true}, +4 null}` | else fabric-site create → `NCSO20572` |
+| 3 | **Create fabric site** | `POST /sda/fabricSites` `[{siteId, authenticationProfileName:"No Authentication", isPubSubEnabled:true}]` | → `catc_fabric_sites` returns the `fabricId` |
+| 4 | **Provision devices** | `POST /sda/provisionDevices` `[{networkDeviceId, siteId}...]` | required before a device can take a fabric role |
+| 5 | **Add Control-Plane** | `POST /sda/fabricDevices` `[{networkDeviceId, fabricId, deviceRoles:["CONTROL_PLANE_NODE"]}]` | **CP before Edge** (edge 400s with no CP) |
+| 6 | **Add Edge** | `POST /sda/fabricDevices` `[{... deviceRoles:["EDGE_NODE"]}]` | |
+| 7 | Global pool → reserve sub-pool | `catc_create_global_pool`; then **`POST /reserve-ip-subpool/{siteId}`** `{name,type:"LAN",ipv4GlobalPool:"<cidr>",ipv4Prefix:true,ipv4PrefixLength,ipv4Subnet,ipv4GateWay}` | the reserve **tool** omits `ipv4GlobalPool` → use the raw call |
+| 8 | Create L3 VN + anchor | `catc_create_layer3_virtual_network`; then `PUT /sda/layer3VirtualNetworks` `[{id, virtualNetworkName, fabricIds:[fabricId]}]` | VN must be anchored to the fabric |
+| 9 | Anycast gateway | `POST /sda/anycastGateways` `[{fabricId, virtualNetworkName, ipPoolName, trafficType:"DATA", isCriticalPool:false, isLayer2FloodingEnabled:false, isWirelessPool:false, isIpDirectedBroadcast:false, isIntraSubnetRoutingEnabled:false, isMultipleIpToMacAddresses:false, autoGenerateVlanName:true}]` | note the auto `vlanName` (e.g. `172_16_10_0-CAMPUS_VN`) |
+| 10 | **Static host onboarding** | `POST /sda/portAssignments` `[{fabricId, networkDeviceId:<edge>, interfaceName, connectedDeviceType:"USER_DEVICE", dataVlanName:<from #9>, authenticateTemplateName:"No Authentication"}]` | assigns the edge access port to the VN |
+
+> **GOTCHA — `NCSO20148 "LISP configuration is already present on device … Remove the
+> LISP configuration and retry"`** when adding a fabric role. Cause: CatC's *cached*
+> config for the device is stale (collected while the device still had manual LISP).
+> Remove the manual LISP on the device, then **`PUT /network-device/sync?forceSync=true`
+> `[deviceIds]`** and wait for `collectionStatus:Managed` before retrying — CatC then
+> sees the clean config.
+
+**Verify** (same as the [CLI module](cli-provisioning.md)): edge `show lisp session`
+(established to the CP); CP `show lisp site` (host `/32` registered); edge
+`show device-tracking database` (host REACHABLE on the access port); host → anycast
+gateway ping. Border L3 handoff (`/sda/fabricDevices/layer3Handoffs/ipTransits`) for
+external reachability is the documented next layer.
+
+### Original blocked flow (pre-install, for reference)
+
+Before the SD Access app was installed, step 3 failed immediately:
 
 ### Step 4 request body (the exact shape — validated against the schema)
 
@@ -70,6 +91,14 @@ the fabric-write/provisioning application ("ConnectivityDomain") isn't running.
 `WIRELESS_CONTROLLER_NODE`.
 
 ## Enabling SD-Access
+
+> **✅ RESOLVED 2026-07-16 — full walkthrough in
+> [`enable-sda-service.md`](enable-sda-service.md).** Root cause: the **SD Access
+> application was simply not installed**. Installing it (System → Software
+> Management, ~44 min) makes `NCSP11008` disappear and fabric provisioning work. The
+> *"Resource reservation check failed"* console banner on this dCloud box was a **red
+> herring** — the install completed fine despite it. The text below is the original
+> diagnosis; treat the "resources / form factor" angle as **not** the cause here.
 
 `NCSP11008 / "No application found for type 'ConnectivityDomain'"` is a
 **service-availability** error, not a payload problem. SD-Access provisioning in

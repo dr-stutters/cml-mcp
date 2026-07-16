@@ -35,7 +35,7 @@ Legend: S/M/L effort · `→` = depends on
 ## Wave 4 — Device administration
 *Isolated on purpose: it touches every switch's login path (lockout risk; console recovery ready).*
 
-- [ ] **A3** TACACS+ device admin (M) — enable ISE Device Admin, shell profiles + command sets by AD group, switches point TACACS+ at ISE; properly replaces the Phase-6 local-vty workaround
+- [x] **A3** TACACS+ device admin (M) — **DONE ✅ (2026-07-16).** ISE Device Admin enabled; shell profile `NetAdmin Priv15` + command set `PermitAllCommands`; NAD TACACS secrets on BORDER-CP/EDGE1; device-admin rule `SDA_NetAdmins` (AD `ISE-Admins`→priv15+permit-all). Switches: `tacacs server`/group + `ip tacacs source-interface Loopback0`; vty `login VTY_authen local group ISE_TACACS` + exec-authz local-first. **Verified:** `test aaa netadmin`→auth (both), SSH `netadmin@EDGE1`→**priv 15** live, `cisco`→local, CatC `forceSync`→isError:false (automation safe). **Local-first is the CatC-safe design** — ISE rejects the weak `cisco` password so TACACS-first would lock CatC out; but on cat9000v IOS-XE 17.x the `local` method **falls through to TACACS for unknown users**, so both work. Retires the Phase-6 workaround. Full: [`modules/tacacs-device-admin.md`](SD-Access%20ISE%20Integration/modules/tacacs-device-admin.md).
 
 ## Wave 5 — Segmentation everywhere
 - [ ] **B4** Multiple VNs + inter-VN fusion routing (M) → B1 — second VN (e.g. IOT_VN), VRF leak/inspect via fusion

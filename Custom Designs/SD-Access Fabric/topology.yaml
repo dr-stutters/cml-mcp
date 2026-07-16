@@ -1,0 +1,433 @@
+# SD-Access Fabric (no ISE) — topology-as-code (build_lab_from_spec)
+#
+# Clean day-0 INTENT: mgmt reachability + underlay only. The FABRIC (LISP/VXLAN,
+# VN, anycast GW, border handoff, host onboarding) is added at provision time by
+# Catalyst Center (modules/catc-provisioning.md) or CLI (modules/cli-provisioning.md).
+#
+# GOTCHAS baked in:
+#  1. FUSION-R1 (cat8000v) boots with `ip ssh version 2` but NO host key — run EXEC
+#     `crypto key generate rsa modulus 4096` (>=3072) post-boot or SSH stays off.
+#  2. Every CML cat9000v defaults to System Serial `CMLUADP`; Catalyst Center dedups
+#     by serial, so 2+ switches collapse into one inventory record. Each switch below
+#     therefore ships a conf/vswitch.xml with a UNIQUE <prod_serial_number>.
+#  3. The alpine endpoint uses eth0-eth3, NOT port0.
+#
+# ROLES: FUSION-R1 = fusion router OUTSIDE the fabric; BORDER-CP = collapsed
+#        Border + Control-Plane; EDGE1 = fabric Edge; HOST1 = static-onboarded endpoint.
+version: 1
+lab:
+  title: SDA-Fabric
+  description: >-
+    Cisco SD-Access fabric in CML without ISE. Fusion router (cat8000v) +
+    collapsed Border/Control-Plane (cat9000v-uadp) + fabric Edge (cat9000v-uadp)
+    + an endpoint (alpine) statically onboarded into one L3 VN. Underlay OSPF
+    area 0 between border and edge; mgmt on 198.18.128.0/18 via System Bridge.
+defaults:
+  definition: cat8000v
+nodes:
+
+  FUSION-R1:
+    x: 500
+    y: 300
+    config: |
+      hostname FUSION-R1
+      ip domain name lab.local
+      enable secret cisco
+      username cisco privilege 15 secret cisco
+      ip ssh version 2
+      interface Loopback0
+       ip address 10.1.0.254 255.255.255.255
+      interface GigabitEthernet1
+       description MGMT to /18
+       ip address 198.18.128.71 255.255.192.0
+       no shutdown
+      interface GigabitEthernet2
+       description Handoff to BORDER-CP Gi1/0/2 (per-VN eBGP added at provision)
+       ip address 10.1.24.2 255.255.255.252
+       no shutdown
+      ip route 0.0.0.0 0.0.0.0 198.18.128.1
+      snmp-server community public RO
+      snmp-server location CML-SDA-Lab
+      line vty 0 4
+       login local
+       transport input ssh
+      end
+
+  BORDER-CP:
+    definition: cat9000v-uadp
+    x: 300
+    y: 300
+    config_files:
+    - name: iosxe_config.txt
+      content: |
+        hostname BORDER-CP
+        ip domain name lab.local
+        enable secret cisco
+        username cisco privilege 15 secret cisco
+        ip ssh version 2
+        ip routing
+        switch 1 provision c9kv-uadp-8p
+        vrf definition Mgmt-vrf
+         address-family ipv4
+         exit-address-family
+        interface Loopback0
+         description RLOC
+         ip address 10.1.0.2 255.255.255.255
+         ip ospf 1 area 0
+        interface GigabitEthernet0/0
+         description OOB MGMT to /18 (Mgmt-vrf)
+         vrf forwarding Mgmt-vrf
+         ip address 198.18.128.72 255.255.192.0
+         no shutdown
+        interface GigabitEthernet1/0/1
+         description Underlay to EDGE1 Gi1/0/1
+         no switchport
+         ip address 10.1.23.1 255.255.255.252
+         ip ospf 1 area 0
+         no shutdown
+        interface GigabitEthernet1/0/2
+         description Handoff to FUSION-R1 Gi2 (per-VN eBGP added at provision)
+         no switchport
+         ip address 10.1.24.1 255.255.255.252
+         no shutdown
+        router ospf 1
+         router-id 10.1.0.2
+        ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 198.18.128.1
+        snmp-server community public RO
+        snmp-server location CML-SDA-Lab
+        line vty 0 4
+         login local
+         transport input ssh
+        end
+    - name: conf/vswitch.xml
+      content: |
+        <?xml version="1.0"?>
+        <!-- Virtual Cat9k configuration information -->
+        <switch>
+          <board_id>20612</board_id>
+          <prod_serial_number>CMLBRDCP01</prod_serial_number>
+          <port_count>24</port_count>
+          <port lpn="1">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="2">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="3">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="4">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="5">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="6">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="7">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="8">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="9">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="10">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="11">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="12">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="13">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="14">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="15">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="16">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="17">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="18">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="19">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="20">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="21">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="22">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="23">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="24">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+        </switch>
+
+  EDGE1:
+    definition: cat9000v-uadp
+    x: 100
+    y: 300
+    config_files:
+    - name: iosxe_config.txt
+      content: |
+        hostname EDGE1
+        ip domain name lab.local
+        enable secret cisco
+        username cisco privilege 15 secret cisco
+        ip ssh version 2
+        ip routing
+        switch 1 provision c9kv-uadp-8p
+        vrf definition Mgmt-vrf
+         address-family ipv4
+         exit-address-family
+        interface Loopback0
+         description RLOC
+         ip address 10.1.0.3 255.255.255.255
+         ip ospf 1 area 0
+        interface GigabitEthernet0/0
+         description OOB MGMT to /18 (Mgmt-vrf)
+         vrf forwarding Mgmt-vrf
+         ip address 198.18.128.73 255.255.192.0
+         no shutdown
+        interface GigabitEthernet1/0/1
+         description Underlay to BORDER-CP Gi1/0/1
+         no switchport
+         ip address 10.1.23.2 255.255.255.252
+         ip ospf 1 area 0
+         no shutdown
+        interface GigabitEthernet1/0/3
+         description HOST1 (fabric edge access - VN/anycast assigned at host onboarding)
+         switchport access vlan 1
+        router ospf 1
+         router-id 10.1.0.3
+        ip route vrf Mgmt-vrf 0.0.0.0 0.0.0.0 198.18.128.1
+        snmp-server community public RO
+        snmp-server location CML-SDA-Lab
+        line vty 0 4
+         login local
+         transport input ssh
+        end
+    - name: conf/vswitch.xml
+      content: |
+        <?xml version="1.0"?>
+        <!-- Virtual Cat9k configuration information -->
+        <switch>
+          <board_id>20612</board_id>
+          <prod_serial_number>CMLEDGE001</prod_serial_number>
+          <port_count>24</port_count>
+          <port lpn="1">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="2">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="3">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="4">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="5">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="6">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="7">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="8">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="9">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="10">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="11">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="12">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="13">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="14">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="15">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="16">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="17">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="18">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="19">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="20">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="21">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="22">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="23">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+          <port lpn="24">
+            <asic_id>0</asic_id>
+            <asic_ifg>0</asic_ifg>
+            <asic_slice>0</asic_slice>
+          </port>
+        </switch>
+
+  HOST1:
+    definition: alpine
+    x: 100
+    y: 450
+
+  MGMT-SW:
+    definition: unmanaged_switch
+    config: 'mode: Bridge'
+    x: 300
+    y: 100
+
+  EXT:
+    definition: external_connector
+    config: System Bridge
+    x: 500
+    y: 100
+
+links:
+# management plane: each network device's mgmt NIC -> unmanaged switch -> System Bridge -> /18
+- EXT:port -- MGMT-SW:port0
+- MGMT-SW:port1 -- FUSION-R1:GigabitEthernet1
+- MGMT-SW:port2 -- BORDER-CP:GigabitEthernet0/0
+- MGMT-SW:port3 -- EDGE1:GigabitEthernet0/0
+# fabric underlay (OSPF area 0) + external handoff
+- EDGE1:GigabitEthernet1/0/1 -- BORDER-CP:GigabitEthernet1/0/1
+- BORDER-CP:GigabitEthernet1/0/2 -- FUSION-R1:GigabitEthernet2
+# endpoint on the fabric edge (alpine interfaces are eth0-eth3, NOT port0)
+- HOST1:eth0 -- EDGE1:GigabitEthernet1/0/3

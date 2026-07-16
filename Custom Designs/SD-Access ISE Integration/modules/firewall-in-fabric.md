@@ -53,6 +53,26 @@ The ACL `deny` line keeps CAMPUS↔IOT on the normal fusion hairpin (B4 stays 10
   `Permit-CAMPUS-Services` +hits, **`Deny-CAMPUS-to-CatC` +hits** = the FTD is the enforcer.
 - Regression: HOST1 ↔ SHARED-SVC (inter-VN) still 100% (excluded from PBR).
 
+## D5 — FTD events to Splunk (syslog)
+Send the FTD's LINA/connection syslog to Splunk (reuses the D2 UDP-514 input → `index=network`).
+All under an **FTD Platform Settings** policy assigned to the device (`fmc_search_spec syslog` +
+`fmc_get_definition` are how you find these — the API is container-heavy):
+1. **Syslog server** — `PUT .../syslog/servers/<containerId>` with a `servers:[…]` array of
+   `SyslogServerConfiguration` (`ipAddress`=host object, `protocol:UDP`, `port:"514"`,
+   **`isMgmtReachable:false` + `interfaces`=[outside zone]** — LINA syslog is data-plane, so source
+   it from the /18-facing data interface, *not* mgmt).
+2. **Basic logging** — `PUT .../syslog/basicloggingsetups/<id>` `enableLogging:true`.
+3. **Logging destination (the piece that actually sends)** — `POST .../syslog/loggingdestinations`
+   `{loggingDestination:"SYSLOG_SERVERS", allEventConfig:{filterCriteria:"SEVERITY", value:"INFO"}}`
+   (= `logging trap informational`). Without this the FTD has `logging host` but never sends.
+4. **Per-rule** — set `enableSyslog:true` + `syslogSeverity:"INFO"` (not `INFORMATIONAL`) on the ACP
+   rules for structured connection events. Then deploy.
+- Verify: `index=network host=198.18.128.82` shows FTD events, e.g. `%FTD-6-305011 Built dynamic
+  translation from inside:172.16.10.50 → outside:198.18.128.82` (a fabric host's live flow through
+  the firewall). ACP **block**s emit connection events (430002-class), not LINA 106023 ACL-denies.
+- Gotcha: the **FMC caps concurrent auth tokens** — long sessions get empty 200s until you force a
+  fresh `generatetoken`.
+
 ## Reversible
 Remove `ip policy route-map PBR-CAMPUS` from Gi3.3001 → CAMPUS external instantly falls back to the
 direct FUSION NAT path; the FTD/FMC config stays for the next test.

@@ -17,6 +17,16 @@ CTS) with per-capability modules. Its `topology.yaml` rebuilds the CML side in
 one `build_lab_from_spec` call with the switch's validated NAD config baked into
 day-0 (stages 2-3 become verification).
 
+**Rebuilding the SD-Access + ISE integration?** Follow
+`Custom Designs/SD-Access ISE Integration/runbook.md` — a fresh ISE 3.5 joined to
+`mitchcloud.lab` AD, wired into Catalyst Center (pxGrid + ERS, all ISE certs re-issued
+from the AD **MitchcloudCA**), Closed-Auth fabric proving **MAB → SGT IoT** and
+**802.1X PEAP/AD → SGT Employees**, plus TrustSec SGACLs. It layers on
+`SD-Access Fabric/runbook.md` (the base). ISE-side gotchas in its `modules/`: the dCloud
+ISE's pxGrid cert keeps the **old CN** (re-issue it or CatC rejects the add); ISE 3.5 ERS
+`getGroups` **502s** (add AD groups by SID via `addGroups`); auth rule needs
+`ifUserNotFound=CONTINUE` so MAB falls through to authZ.
+
 ## Hard rules
 
 - **Use the `ise` MCP tools for ISE — not raw httpx via Bash.** They wrap ISE's

@@ -216,12 +216,18 @@ hierarchy + assignment, OSPF fabric for topology/path-trace), rebuild straight f
 `Mgmt-vrf`; Assurance lags ~15 min).
 
 For an **SD-Access fabric** (LISP overlay, VN, static host onboarding, no ISE) see
-**`Custom Designs/SD-Access Fabric/runbook.md`** + its `modules/` — the CLI path is
-validated; **CatC-driven SDA provisioning is blocked on the current appliance with
-`NCSP11008` ("No application found for type 'ConnectivityDomain'")**, so the SDA
-*write* endpoints (`/sda/fabricSites`, `/sda/fabricDevices`, …) fail even though the
-SDA *read* tools work. Confirm the SD-Access provisioning service is enabled before
-attempting CatC fabric writes.
+**`Custom Designs/SD-Access Fabric/runbook.md`** + its `modules/` — **both** the CLI
+LISP path and the full **CatC-driven** path are validated (edge↔CP LISP session up,
+host EID registered, host→anycast-GW ping). Key CatC gotchas:
+- **`NCSP11008` "No application found for type 'ConnectivityDomain'"** on SDA *writes*
+  = the **SD Access application isn't installed** (System → Software Management →
+  install it, ~44 min). It is *not* a resource problem. Full fix:
+  `modules/enable-sda-service.md`.
+- Per fabric site, enable **Wired Data Collection** telemetry first (else `NCSO20572`).
+- Provision devices, then add the **Control-Plane role before the Edge**.
+- After any manual device config change, **`PUT /network-device/sync?forceSync=true`**
+  before adding a fabric role, or CatC's stale cache throws `NCSO20148 "LISP already
+  present"`. Full working API sequence: `modules/catc-provisioning.md`.
 
 ## Reporting
 

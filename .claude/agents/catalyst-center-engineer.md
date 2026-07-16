@@ -218,7 +218,7 @@ hierarchy + assignment, OSPF fabric for topology/path-trace), rebuild straight f
 For an **SD-Access fabric** (LISP overlay, VN, static host onboarding, no ISE) see
 **`Custom Designs/SD-Access Fabric/runbook.md`** + its `modules/` — **both** the CLI
 LISP path and the full **CatC-driven** path are validated (edge↔CP LISP session up,
-host EID registered, host→anycast-GW ping). Key CatC gotchas:
+host EID registered, host→anycast-GW ping, **border L3 handoff → external 100%**). Key CatC gotchas:
 - **`NCSP11008` "No application found for type 'ConnectivityDomain'"** on SDA *writes*
   = the **SD Access application isn't installed** (System → Software Management →
   install it, ~44 min). It is *not* a resource problem. Full fix:
@@ -228,6 +228,19 @@ host EID registered, host→anycast-GW ping). Key CatC gotchas:
 - After any manual device config change, **`PUT /network-device/sync?forceSync=true`**
   before adding a fabric role, or CatC's stale cache throws `NCSO20148 "LISP already
   present"`. Full working API sequence: `modules/catc-provisioning.md`.
+- **Provision the border role up front.** A collapsed CP+Border is one device; retro-fitting
+  the border later needs a full fabric rebuild (CatC won't update roles in-place, and won't
+  delete the only CP while an edge exists → `NCHS20529`). `borderPriority` **1–9** (`NCHS20300`).
+  The L3 handoff (`/sda/fabricDevices/layer3Handoffs/ipTransits`) renders on a **cat9000v as an
+  SVI (`Vlan<id>`) on a trunk**, *not* a dot1Q subinterface — which is why the CatC path succeeds
+  where hand-rolled CLI (no L3 subinterface on cat9000v) fails. Match it with an off-fabric
+  eBGP + NAT `default-originate` on the fusion router (catalyst-engineer).
+- **Config-push to a re-provisioned cat9000v fails** two ways (shifting errors `NCNP10200` →
+  "unable to push" → `NCIM12018 ERROR-CONNECTION-CLOSED`): (1) re-provisioning re-applies the
+  Network-AAA template → vty flips RADIUS-first → set **both** `aaa authentication login VTY_authen`
+  **and** `aaa authorization exec VTY_author` **local-first**; (2) `ip ssh bulk-mode` resets the
+  push session → `no ip ssh bulk-mode`, then `forceSync` to `Managed`. A failed `portAssignments`
+  POST still commits the intent (retry 400s `NCHS20140`) → DELETE the stale intent, then re-POST.
 
 For the **identity-driven** evolution (fresh ISE → AD → CatC → Closed Auth + TrustSec) see
 **`Custom Designs/SD-Access ISE Integration/runbook.md`** + its `modules/`. CatC-side gotchas:

@@ -203,16 +203,26 @@ data-plane drop as a documented CML fidelity limit.
 3. **`authentication-policy-servers` needs top-level `port:49`** (Stage 4).
 4. **ISE 3.5 ERS `getGroups` 502s** → add AD groups by SID via `addGroups` (Stage 3).
 5. **Site AAA device-admin lockout** — Network AAA=ISE makes vty RADIUS-first; ISE rejects
-   `cisco/cisco` → CatC SSH dies. Keep device admin **local** on-box; `aaaSettings` PUT is
-   merge-only so it can't be cleared via API (Stage 6).
+   `cisco/cisco` → CatC SSH dies. Keep device admin **local** on-box: set **both**
+   `aaa authentication login VTY_authen` **and** `aaa authorization exec VTY_author` local-first
+   (exec-authz RADIUS-first blocks config mode → "unable to push"). `aaaSettings` PUT is
+   merge-only so it can't be cleared via API; **any re-provision re-applies the RADIUS-first
+   template → re-fix after** (Stage 6).
 6. **`NCSO20804`** on the port auth-template change → **re-provision** the device first (Stage 6).
 7. **Closed-auth per-port template not rendered** by CatC on cat9000v → bind
    `source template DefaultWiredDot1xClosedAuth` via CLI (Stage 6).
 8. **UADP front-panel ports lag ~1–2 min** after a link/bounce; **added nodes need
    `refresh_testbed`** before pyATS can reach them.
 9. **Alpine has no wpa_supplicant + no fabric internet** → install via the external connector
-   (Stage 7).
+   (Stage 7). Console user is `cisco` (sudo, not root); the runtime IP+supplicant are lost on a
+   plain reboot → persist via `/etc/local.d/sda-endpoint.start` (OpenRC `local`); a **wipe** loses
+   the apk binary too. See [`endpoints-and-supplicant.md`](modules/endpoints-and-supplicant.md).
 10. **TrustSec data-plane** enforcement is control-plane-only on virtual cat9000v (above).
+11. **Border L3 handoff (B1) for the VN's external reachability** — the fabric must have a
+    **`BORDER_NODE` (Layer-3)** role + IP-transit handoff; a CP-only "border" black-holes the
+    return path. Retro-fitting the role needs a full fabric rebuild; CatC renders the handoff on
+    cat9000v as an **SVI on a trunk**, and the fusion router does eBGP + NAT `default-originate`.
+    Verified: HOST1 (alice→SGT4) → ISE/Splunk 100%. See the [SD-Access Fabric CatC module](../SD-Access%20Fabric/modules/catc-provisioning.md) steps 11–12 + `no ip ssh bulk-mode` push gotcha.
 
 ## Related
 

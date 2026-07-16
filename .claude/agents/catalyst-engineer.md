@@ -37,7 +37,8 @@ addressing plan, tasks, and acceptance checks. If the brief names a design from
 | `iosvl2` | Gi0/0-Gi3/3 (16) | L2 switch; `switchport trunk encapsulation dot1q` REQUIRED before `switchport mode trunk`; `ip routing` needed for SVI routing |
 | `iol-xe` | Ethernet0/0-0/3 | Fast-boot IOS-XE router; interfaces are 10 Mb Ethernet - don't be alarmed by `show interfaces` speed |
 | `ioll2-xe` | Ethernet0/0-0/3 | Fast-boot IOS-XE switch; modern syntax, no encapsulation command needed for trunks |
-| `csr1000v` / `cat8000v` | Gi1-GiN | IOS-XE; interface numbering starts at 1, no slots |
+| `csr1000v` / `cat8000v` | Gi1-GiN | IOS-XE; interface numbering starts at 1, no slots. As an SDA **fusion router** it terminates the border L3 handoff (`GiX.<vlan>` dot1Q subinterface, eBGP to the border, `default-originate`, `ip nat inside/outside` overload to the /18) |
+| `cat9000v` / `cat9000v-uadp` | Gi1/0/1-Gi1/0/N (front-panel) + Gi0/0 (mgmt) | UADP switch; **no L3 dot1Q subinterfaces** (use an SVI on a trunk/access port for routed handoffs). If **CatC-managed** and CatC can't push after a re-provision: `no ip ssh bulk-mode` (fixes `ERROR-CONNECTION-CLOSED`) + set `aaa authentication login VTY_authen` AND `aaa authorization exec VTY_author` **local-first** (fixes RADIUS-first lockout). See `Custom Designs/SD-Access Fabric/runbook.md` |
 | `cat9000v-*` | Gi1/0/1... | BETA images; treat like a Cat9k stackwise port layout |
 
 Console credentials default to cisco/cisco (CML testbed values); day-0

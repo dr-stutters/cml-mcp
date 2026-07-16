@@ -28,7 +28,7 @@ Legend: S/M/L effort · `→` = depends on
 
 - [ ] **A1** EAP-TLS client certs (M) — re-enable client-auth trust on MitchcloudCA in ISE (deferred item); AD CS user cert onto HOST1; wpa_supplicant TLS → SGT
 - [ ] **A2** TEAP / EAP chaining (M) → A1 — machine + user certs in one authentication
-- [ ] **A4** ISE admin RBAC via AD (S) — GUI admin login mapped to AD groups
+- [x] **A4** ISE admin RBAC via AD (S) — **DONE (2026-07-16).** AD group `ISE-Admins`→ISE `Super Admin` RBAC verified (`isExternal:true, src:mitchcloud`). netadmin can log in as Super Admin. Note the one GUI-only prereq below. Done via API/MCP: AD group `ISE-Admins` (SID `…-1110`) + user `netadmin`/`Cisco12345!` (mitchcloud.lab); `ISE-Admins` added to the ISE AD join point (4 groups now). The RBAC map (`PUT /api/v1/rbac/admin-group/Super Admin` → `isExternal:true, externalIdenSourceName:"mitchcloud", externalGroups:["mitchcloud.lab/Users/ISE-Admins"], rbacUsers:["admin"]`, exact original description) is **blocked until admin auth is external**: ISE returns *"Authentication has been set to internal by default"*. **REMAINING (GUI-only, no API):** Administration → System → Admin Access → Authentication → Authentication Method = **Password Based**, Identity Source = **mitchcloud (AD)** → Save. Then re-run the admin-group PUT and log in as `netadmin` to verify Super Admin RBAC. Body-format gotchas: `externalGroups`=array of **strings**, `rbacUsers`=array of **strings**, description must equal the system group's exact text (can't edit a system group's description).
 - [ ] **A7** Endpoint profiling (M) — device sensor + RADIUS accounting → profiler policies → per-device-type authz
 - [ ] **A8** Posture assessment (L) → A7 — ISE 3.5 agentless posture (SSH to endpoint); experimental in CML
 

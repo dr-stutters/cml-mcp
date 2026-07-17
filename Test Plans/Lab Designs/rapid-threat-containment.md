@@ -1,22 +1,26 @@
 # Test Plan — Rapid Threat Containment (ISE ANC quarantine → CoA)
 
-**Plan ID prefix:** `RTC-` · **Version:** 2.0 · **Last updated:** 2026-07-17
+**Plan ID prefix:** `RTC-` · **Version:** 3.0 · **Last updated:** 2026-07-17
 
 ## 1. Scope & purpose
 
 Validate roadmap item **C2 (Rapid Threat Containment)** on the
 [SD-Access ISE Integration](../../Custom%20Designs/SD-Access%20ISE%20Integration/) lab **end to end,
-in both of its stages**: that a security decision can **contain a live endpoint on the SD-Access
+across its stages**: that a security decision can **contain a live endpoint on the SD-Access
 fabric** by applying an ISE **ANC (Adaptive Network Control)** quarantine, which issues a **RADIUS
 Change-of-Authorization (CoA, RFC 5176)** to the fabric edge that owns the endpoint's 802.1X session
 — bouncing that session and cutting the endpoint's access — and that **clearing** the quarantine
-restores it. The plan proves the containment **two ways**:
+restores it. The plan proves the containment **three ways**:
 
 - **Stage A — ISE-driven (`RTC-001…007`).** The ANC is applied/cleared **directly via ISE's API**.
   This proves the containment primitive is sound independent of who pulls the trigger.
 - **Stage B — FMC auto-trigger over pxGrid (`RTC-010…014`).** An **FMC correlation rule** fires on an
   FTD connection event and its **remediation auto-applies the same ANC over pxGrid EPS** — **no human
   in the loop** — and ISE fires the identical CoA. This is the full RTC / SOAR-style closed loop.
+- **Stage C — IPS / Snort 3 detection auto-trigger (`RTC-020…025`, C6).** A **custom Snort 3 intrusion
+  rule** on the FTD drops a payload signature and its **intrusion event** feeds the *same* correlation
+  policy — an **IPS *detection*** (not an ACL deny) auto-applies the identical ANC. Proves the loop can
+  be armed by the firewall's *inspection* engine, not just its access rules.
 
 Out of scope: load/scale testing and endpoint posture.
 
@@ -120,6 +124,22 @@ Pass criteria include the **observed 2026-07-17 result** inline (`→ ✅ …`).
 | `RTC-013` | Auto-containment is effective | EDGE1 `show access-session mac …`; HOST1 pings both dests | No session on EDGE1; **100% loss** to both → ✅ no session, both 100% loss |
 | `RTC-014` | Release + restore after auto-containment | `ise_clear_anc(...)`; `wpa_cli reassociate`; EDGE1 session; ISE session; HOST1 pings; `ise_list_anc_endpoints` | **EAP SUCCESS / Authorized**, back to **SGT 4**, 1 active session; both pings **0%**; no ANC residual → ✅ SGT 4, count=1, both 0%, `[]` |
 
+### Stage C — IPS / Snort 3 detection auto-trigger (C6)
+
+An **IPS *detection*** — a custom Snort 3 rule dropping a payload signature — feeds the **same**
+`RTC-Quarantine` correlation policy via a second correlation rule (`Quarantine-on-IPS-C6`, condition
+**Rule SID is 1000001**), whose remediation `Quarantine-Source` auto-applies the identical ANC over
+pxGrid. Trigger (raw payload → stays in `pkt_data`): `printf 'C6TRIGGER probe\n' | nc -w 3 198.18.128.51 8000`.
+
+| ID | Objective | Steps | Expected result / pass criteria |
+|---|---|---|---|
+| `RTC-020` | Custom Snort 3 rule exists in FMC | `GET object/intrusionrules/{id}` | Rule `2000:1000001` — **gid 2000, sid 1000001**, group **Local Rules**, `content:"C6TRIGGER"`, in-policy override **DROP** → ✅ (2026-07-17) rule `5254002E…972036`, rev 5, msg "LOCAL C6 RTC test trigger" |
+| `RTC-021` | IPS policy attached to the allow rule | FMC `GET` accessrule; FTDv `show access-control-config` | `Permit-CAMPUS-Services` **Action Allow · Intrusion Policy SDA-IPS** (PREVENTION, base *Connectivity Over Security*) → ✅ confirmed on box + REST |
+| `RTC-022` | Baseline (uncontained) | `active_session_count`; `list_anc_endpoints`; HOST1 `ping 198.18.128.51` | 1 session; ANC `[]`; **0% loss** → ✅ SGT 4, PermitAccess, 0% (4/4), audit-session `0217010A000000146FFB1A92` |
+| `RTC-023` | Fire trigger → FTD Snort drops it | HOST1 `nc` C6TRIGGER; FTDv `show snort statistics` (before/after) | **Blocked Packets increments** → ✅ 7 → 9 (+2, one per trigger); intrusion event raised |
+| `RTC-024` | IPS drop auto-quarantines (no human) | `list_anc_endpoints`; `ise_auth_status_by_mac`; `active_session_count`; EDGE1 session; HOST1 ping | ANC auto-created = MAC + `Quarantine` (**no apply**); CoA **msg 5205** `Error-Cause=200`; **0 sessions**; **100% loss** → ✅ 2 recs `52:54:00:03:0B:0D`/Quarantine, 5205 @12:37:25 vs `…146FFB1A92`, count 0, 100% |
+| `RTC-025` | Reversibility / restore | `ise_clear_anc`(×N per record); `wpa_cli reassociate`; verify | Re-auth **Authorized SGT 4**; ANC `[]`; **0% loss** → ✅ count 1, session `…157016CAEF`, 0% (5/5) after ~90 s LISP EID re-registration |
+
 ## 6. Pass/fail & exit criteria
 
 - **Plan pass =** Stage A `RTC-002…006` (baseline → ANC-sourced CoA + full loss + 0 sessions → clean
@@ -131,6 +151,9 @@ Pass criteria include the **observed 2026-07-17 result** inline (`→ ✅ …`).
   (Stage B) the blocked FTD event does **not** produce an ANC binding without a manual apply.
 - `RTC-007` is a **known partial**: the soft SGT/SGACL re-admission path is built but the observed CoA
   behaviour is full session termination, recorded as ⚠️ not-a-blocker.
+- **C6 (Stage C) plan pass =** `RTC-020…025` all PASS: the custom Snort 3 rule exists + is attached
+  (Allow rule → SDA-IPS), the trigger drops on the FTD (Blocked Packets +2), the drop **auto-applies** the
+  ANC with no operator action → identical CoA (msg 5205) → 0 sessions + 100% loss, then a clean restore.
 - **C2 status: DONE ✅ (2026-07-17) — Stage A + Stage B both proven live.** The FMC auto-trigger's
   unlock was pxGrid **EPS/ANC** client-group membership (add the FMC pxGrid client to ISE's **`ANC`**
   group); full recipe in
@@ -143,6 +166,7 @@ Pass criteria include the **observed 2026-07-17 result** inline (`→ ✅ …`).
 | ANC quarantine + CoA containment (the C2 core) | RTC-001…006 | C2 Stage A |
 | Soft SGT/SGACL re-admission | RTC-007 | C2 (partial) |
 | FMC correlation → remediation → pxGrid ANC auto-trigger | RTC-010…014 | C2 Stage B |
+| IPS / Snort 3 detection → same correlation policy → ANC auto-trigger | RTC-020…025 | C6 (Stage C) |
 
 All cases are manual-live acceptance (no CI gate — require the live ISE + SDA fabric + FMC/FTD).
 Underlying tool health is covered by the [ise-mcp](../MCP%20Servers/ise-mcp.md) and
@@ -154,6 +178,7 @@ Underlying tool health is covered by the [ise-mcp](../MCP%20Servers/ise-mcp.md) 
 |---|---|---|---|---|
 | 2026-07-17 | main session (live) | **6 PASS, 1 partial** (Stage A only: RTC-001…006 P; RTC-007 ⚠) | ISE session `CoASourceComponent=ANC`; HOST1 reach flip 0%→100%→0%; EDGE1 SGT 4→none→4; `noOfActiveSession=0` while contained | none |
 | 2026-07-17 | testing-agent (live) | **12 PASS, 1 partial** (Stage A 6P+1⚠ · Stage B 5P) | Stage A: ANC endpoint `74d844c0…`=`Quarantine`, CoA msg 5205 @10:27:42, 0 sessions, 100% loss, restored SGT 4. **Stage B: ANC endpoint `49356d5a…`=`52:54:00:03:0B:0D`/`Quarantine` auto-created (no `ise_apply_anc`), CoA msg 5205 @10:31:56 vs `…6F9FBCA7`, 0 sessions, both dests 100% loss, then restored (SGT 4, count=1, `[]`).** Report: [Test Reports/2026-07-17](../../Test%20Reports/2026-07-17/report.pdf) | none |
+| 2026-07-17 | testing-agent (live) | **6 PASS** (Stage C: RTC-020…025) | C6 IPS-RTC: custom rule `2000:1000001` (Local Rules, DROP), SDA-IPS on `Permit-CAMPUS-Services`; trigger → Snort Blocked Packets 7→9; **auto-ANC** `52:54:00:03:0B:0D`/Quarantine (no apply), CoA msg 5205 `Error-Cause=200` @12:37:25, 0 sessions, 100% loss; restored (SGT 4, count 1, `[]`). Report: [Test Reports/2026-07-17/report-C6-IPS-RTC.pdf](../../Test%20Reports/2026-07-17/report-C6-IPS-RTC.pdf) | none |
 
 ### Notes / gotchas observed
 
@@ -167,3 +192,8 @@ Underlying tool health is covered by the [ise-mcp](../MCP%20Servers/ise-mcp.md) 
   by MnT **msg 5205** + the ANC binding + active-count 0 regardless.
 - **`RTC-Quarantine` correlation policy is left ACTIVE** — it re-quarantines any HOST1→host-catc
   attempt (that is the feature). Deactivate its toggle to pause.
+- **(C6 / Stage C)** the same `RTC-Quarantine` policy also fires on the IPS drop (rule `Quarantine-on-IPS-C6`,
+  **Rule SID 1000001** — correlate on Rule SID, *not* Generator ID: FMC files user rules under GID 2000).
+- **(C6)** SDA-IPS must use an **active** base (*Connectivity Over Security*) — a *No Rules Active* base does not
+  compile custom Local Rules (Blocked Packets stays 0). Use a **raw `nc` payload** so C6TRIGGER stays in `pkt_data`
+  (HTTP inspection moves it into HTTP buffers). Firing twice creates two duplicate `ancendpoint` records → clear each.

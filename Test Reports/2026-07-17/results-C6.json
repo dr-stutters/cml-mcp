@@ -1,0 +1,54 @@
+{
+  "report": "C6 — IPS / Snort 3 -> Rapid Threat Containment (Stage C)",
+  "run_date": "2026-07-17",
+  "mode": "manual-live",
+  "plan": "Test Plans/Lab Designs/rapid-threat-containment.md",
+  "plan_section": "Stage C (RTC-020..025)",
+  "verdict": "PASS",
+  "lab": {"name": "SDA-Fabric", "id": "77dd2fde-1fda-4cc9-9b29-48ff98bd1395", "state": "STARTED/converged"},
+  "versions": {
+    "ise": "3.5.0.527",
+    "fmc": "10.0.1 (build 1)",
+    "ftd": "10.0.0",
+    "fabric_edge": "cat9000v IOS-XE 17.18",
+    "fabric": "SD-Access LISP/VXLAN closed-auth",
+    "snort_engine": "SNORT3 / PREVENTION, base Connectivity Over Security"
+  },
+  "targets": {
+    "ise35": {"address": "198.18.134.35", "role": "PSN — policy decision point + CoA origin (UDP 1700) + pxGrid controller", "reachable": true},
+    "FMCv": {"address": "198.18.128.80", "role": "correlation (Quarantine-on-IPS-C6) + remediation (Quarantine-Source), pxGrid consumer", "reachable": true},
+    "FTDv": {"address": "198.18.128.81", "device_id": "37ffcab8-8126-11f1-a47b-d7a4b50be775", "role": "Snort 3 IPS enforcer (SDA-IPS on Permit-CAMPUS-Services)", "reachable": true, "health": "yellow (cosmetic; MANAGED/DEPLOYED, dropped the trigger + raised the event)"},
+    "EDGE1": {"radius_id": "10.1.0.3", "mgmt": "198.18.128.73", "role": "fabric edge / NAD (CoA client)", "reachable": true},
+    "HOST1": {"address": "172.16.10.50", "mac": "52:54:00:03:0B:0D", "port": "Gi1/0/3", "user": "alice", "reachable": true},
+    "host-splunk": {"address": "198.18.128.51", "role": "trigger/reference dest (Permit-CAMPUS-Services allow -> Snort inspected)", "reachable": true}
+  },
+  "trigger": "printf 'C6TRIGGER probe\\n' | nc -w 3 198.18.128.51 8000  (x2, raw payload -> stays in pkt_data)",
+  "cases": [
+    {"id": "RTC-020", "stage": "C", "objective": "Custom Snort 3 rule exists in FMC (Local Rules, gid 2000 sid 1000001)", "result": "PASS",
+     "evidence": {"rule_id": "5254002E-0748-0ed3-0000-004294972036", "name": "2000:1000001", "gid": 2000, "sid": 1000001, "rev": 5, "ruleGroup": "Local Rules", "content": "C6TRIGGER (nocase)", "msg": "LOCAL C6 RTC test trigger", "ruleData": "alert tcp any any -> any any ( msg:\"LOCAL C6 RTC test trigger\"; flow:to_server,established; content:\"C6TRIGGER\",nocase; sid:1000001; gid:2000; rev:5; )", "in_policy_overrideState": "DROP (GET policy/intrusionpolicies/SDA-IPS/intrusionrules/{id})"}},
+    {"id": "RTC-021", "stage": "C", "objective": "IPS policy SDA-IPS attached to the allow rule Permit-CAMPUS-Services (Snort inspects the flow)", "result": "PASS",
+     "evidence": {"fmc_rest": "accessrules/Permit-CAMPUS-Services -> action=ALLOW, ipsPolicy=SDA-IPS (5254002E-0748-0ed3-0000-004294972055), enabled=true", "ips_policy": "SDA-IPS inspectionMode=PREVENTION, basePolicy='Connectivity Over Security' (active base -> compiles Local Rules; gotcha #1)", "on_box": "FTDv 'show access-control-config' -> Rule: Permit-CAMPUS-Services / Action: Allow / Intrusion Policy: SDA-IPS ; Source net-campus10 (172.16.10.0/24) -> Dest host-splunk (198.18.128.51) among others"}},
+    {"id": "RTC-022", "stage": "C", "objective": "Baseline (uncontained): 1 active session, no ANC, HOST1->host-splunk 0% loss", "result": "PASS",
+     "evidence": {"active_session_count": 1, "anc_endpoints": "[]", "host_ip": "172.16.10.50/24 (eth0)", "ping_198.18.128.51": "0% loss (4/4, ~94ms avg)", "ise_session": "alice active, Employees SGT 4, PermitAccess, rule Employees_SGT, PEAP(EAP-MSCHAPv2), store mitchcloud, NAS 10.1.0.3 (EDGE1.lab.local) Gi1/0/3, audit-session 0217010A000000146FFB1A92"}},
+    {"id": "RTC-023", "stage": "C", "objective": "Fire C6TRIGGER -> FTD Snort drops it (Blocked Packets increments)", "result": "PASS",
+     "evidence": {"trigger": "HOST1: printf 'C6TRIGGER probe' | nc -w 3 198.18.128.51 8000 (x2)", "snort_blocked_before": 7, "snort_blocked_after": 9, "delta": "+2 (one drop per trigger connection)", "note": "the first data segment elicited an HTTP 400 from Splunkd yet Blocked Packets still incremented and the intrusion event was raised (drives the RTC loop) — the auto-quarantine outcome is unambiguous"}},
+    {"id": "RTC-024", "stage": "C", "objective": "IPS drop auto-quarantines alice via the RTC loop (ANC + CoA + containment) — no human", "result": "PASS",
+     "evidence": {"auto_anc": "NO ise_apply_anc called; ANC endpoints [] -> 2 records, both macAddress 52:54:00:03:0B:0D / policyName Quarantine (ids de1dea5c-06c7-43af-89ea-4b95a4c2bf11, 8434eee2-147e-4adc-a05a-972fcb03324b)", "coa": "MnT AuthStatus msg 5205 'Dynamic Authorization succeeded', response {Error-Cause=200}, 2026-07-17T12:37:25.647Z, audit-session 0217010A000000146FFB1A92 (alice's live session); followed by 5417/11103 client-side termination", "active_session_count": 0, "edge1": "show access-session int Gi1/0/3 -> 'No sessions match supplied criteria'", "ping_198.18.128.51": "100% loss (0/4)"}},
+    {"id": "RTC-025", "stage": "C", "objective": "Reversibility: clear ANC + reassociate -> session restored, no residual, 0% loss", "result": "PASS",
+     "evidence": {"clear": "ise_clear_anc(52:54:00:03:0B:0D, Quarantine) x2 (one per auto-created record) -> ANC endpoints []", "reassociate": "HOST1 'sudo -n wpa_cli -i eth0 reassociate' -> OK; wpa_state=COMPLETED, PAE=AUTHENTICATED, suppPortStatus=Authorized, EAP=SUCCESS", "edge1": "Gi1/0/3 Authorized, User alice, VRF CAMPUS_VN, IPv4 172.16.10.50, SGT Value 4, new session 0217010A000000157016CAEF", "ise": "alice active, active_session_count=1, framed 172.16.10.50, session 0217010A000000157016CAEF", "ping_198.18.128.51": "0% loss (5/5) after ~90s LISP EID re-registration (control plane restored within seconds; data path returned after a further reconvergence cycle)", "anc_residual": "none ([])"}}
+  ],
+  "summary": {"pass": 6, "partial": 0, "fail": 0, "skip": 0, "unreachable": 0},
+  "alice_restored": {"sgt": 4, "matched_rule": "Employees_SGT", "active_session_count": 1, "anc_residual": "none", "ping_198.18.128.51": "0% loss", "edge1_session": "0217010A000000157016CAEF Authorized"},
+  "observations": [
+    "Two ANC records were auto-created for the same MAC (two triggers -> two correlation fires; ISE ERS permits duplicate ancendpoint records for a MAC). Required two ise_clear_anc calls to fully clear. A single trigger creates one record. Containment is identical; not a defect.",
+    "The trigger's first data segment drew an HTTP 400 from Splunkd (port 8000) yet the Snort Blocked-Packets counter still incremented and the intrusion event fired the RTC loop — consistent with the pkt_data/http-buffer nuance (gotcha #2). The definitive outcome (auto-quarantine + 100% loss) is unambiguous.",
+    "LISP EID re-registration took ~90s for the data path to return this run (longer than the prior ~15-30s); the control plane (EDGE1 Authorized/SGT 4, ISE live session) restored within seconds.",
+    "FTDv health reported 'yellow' (cosmetic) but MANAGED/DEPLOYED and fully functional — it dropped the trigger and raised the event."
+  ],
+  "gotchas": [
+    "'No Rules Active' base does NOT compile custom Local Rules -> use an active base (Connectivity Over Security) so the rule group compiles and the per-rule DROP override takes effect.",
+    "HTTP-inspected flows move the payload into HTTP buffers (a bare content on pkt_data won't match) -> use a raw non-HTTP nc payload (reliable) or the http_uri sticky buffer.",
+    "Correlate on Rule SID (1000001), not Generator ID — FMC files user rules under GID 2000, which is not in the correlation Generator-ID picker."
+  ],
+  "reversibility": "no built config modified; only reversible ANC round-trips + trigger traffic, all undone; alice verified fully restored (SGT 4, 0% loss, no ANC residual, 1 active session)."
+}

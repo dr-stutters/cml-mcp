@@ -31,6 +31,14 @@ relevant one before rebuilding:
   add FMC's pxGrid client to ISE's **`ANC`** pxGrid client-group (Admin → pxGrid Services → Client
   Management) or the remediation's ANC-policy list is empty. Plus the FMC classic-`.cgi` GUI
   gotchas (double-Create clicks, `select` onchange, condition-value drops).
+- [`fmc-ips-rtc.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-ips-rtc.md)
+  — **IPS / Snort 3 → RTC**: a custom Snort 3 rule (created via the **REST API** —
+  `object/intrusionrules` + `policy/intrusionpolicies` + per-policy `overrideState:DROP` +
+  access-rule `ipsPolicy`) drops on live traffic and feeds the **same** RTC-Quarantine loop via a
+  correlation rule keyed on **Rule SID** (custom rules are **GID 2000**, absent from the classic
+  Generator-ID picker). **The unlock:** a custom Local Rule **won't compile under a "No Rules
+  Active" base** — use an *active* base (Connectivity Over Security) or nothing drops; and an HTTP
+  flow hides the payload from bare `content` (use `http_uri` or a raw non-HTTP trigger).
 
 > **FMC session hygiene:** FMC caps concurrent sessions per user — keep API work (`curl
 > generatetoken`, the `fmc` MCP) on one account and any GUI on a **separate** account, or the

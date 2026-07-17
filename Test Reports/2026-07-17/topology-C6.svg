@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 600" font-family="Helvetica,Arial,sans-serif">
+<rect x="0" y="0" width="980" height="600" fill="#ffffff"/>
+<defs><marker id="ah-b91c1c" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#b91c1c"/></marker></defs>
+<defs><marker id="ah-1d4ed8" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#1d4ed8"/></marker></defs>
+<defs><marker id="ah-15803d" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#15803d"/></marker></defs>
+<line x1="178" y1="502.0" x2="215" y2="502.0" stroke="#94a3b8" stroke-width="1.6"/>
+<line x1="373" y1="502.0" x2="410" y2="502.0" stroke="#94a3b8" stroke-width="1.6"/>
+<line x1="568" y1="502.0" x2="605" y2="502.0" stroke="#94a3b8" stroke-width="1.6"/>
+<line x1="763" y1="502.0" x2="800" y2="502.0" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="196.5" y="496.0" text-anchor="middle" font-size="8" fill="#64748b">802.1X</text>
+<text x="391.5" y="496.0" text-anchor="middle" font-size="8" fill="#64748b">VXLAN</text>
+<text x="586.5" y="496.0" text-anchor="middle" font-size="8" fill="#64748b">L3 handoff</text>
+<text x="781.5" y="496.0" text-anchor="middle" font-size="8" fill="#64748b">PBR inside</text>
+<line x1="835" y1="470" x2="769.0" y2="314" stroke="#15803d" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#ah-15803d)"/>
+<text x="796.0" y="392.0" text-anchor="end" font-size="8.6" font-weight="700" fill="#15803d">C6TRIGGER</text>
+<text x="796.0" y="403.0" text-anchor="end" font-size="7.8" fill="#15803d">raw nc :8000</text>
+<text x="879.0" y="550" text-anchor="middle" font-size="9" font-weight="700" fill="#b91c1c">Snort 3 SID 1000001 -&gt; DROP + intrusion event</text>
+<line x1="940" y1="470" x2="940" y2="134" stroke="#1d4ed8" stroke-width="2.0" stroke-dasharray="6 4" marker-end="url(#ah-1d4ed8)"/>
+<text x="932" y="298.0" text-anchor="end" font-size="9" font-weight="700" fill="#1d4ed8">(1) intrusion</text>
+<text x="932" y="309.0" text-anchor="end" font-size="8" fill="#1d4ed8">event / sftunnel</text>
+<line x1="800" y1="102.0" x2="458" y2="102.0" stroke="#1d4ed8" stroke-width="2.0" stroke-dasharray="6 4" marker-end="url(#ah-1d4ed8)"/>
+<text x="629.0" y="96.0" text-anchor="middle" font-size="9" font-weight="700" fill="#1d4ed8">(2) pxGrid EPS -&gt; auto-apply ANC Quarantine</text>
+<line x1="379.0" y1="134" x2="294.0" y2="470" stroke="#b91c1c" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#ah-b91c1c)"/>
+<text x="373.0" y="298.0" text-anchor="start" font-size="9.5" font-weight="700" fill="#b91c1c">(3) CoA (RFC 5176)</text>
+<text x="373.0" y="310.0" text-anchor="start" font-size="8.5" fill="#b91c1c">UDP 1700 -&gt; terminate session</text>
+<text x="99.0" y="550" text-anchor="middle" font-size="9" font-weight="700" fill="#b91c1c">(4) 100% loss</text>
+<rect x="20" y="470" width="158" height="64" rx="7" fill="#eef6ef" stroke="#15803d" stroke-width="1.6"/>
+<text x="99.0" y="488" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">HOST1 / alice</text>
+<text x="99.0" y="501" text-anchor="middle" font-size="8.6" fill="#64748b">alpine 802.1X subject</text>
+<text x="99.0" y="512" text-anchor="middle" font-size="8.6" fill="#64748b">172.16.10.50</text>
+<text x="99.0" y="523" text-anchor="middle" font-size="8.6" fill="#64748b">MAC 52:54:00:03:0B:0D</text>
+<rect x="215" y="470" width="158" height="64" rx="7" fill="#f4f6f9" stroke="#334155" stroke-width="1.6"/>
+<text x="294.0" y="488" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">EDGE1</text>
+<text x="294.0" y="501" text-anchor="middle" font-size="8.6" fill="#64748b">cat9000v fabric edge / NAD</text>
+<text x="294.0" y="512" text-anchor="middle" font-size="8.6" fill="#64748b">RADIUS+CoA id 10.1.0.3</text>
+<text x="294.0" y="523" text-anchor="middle" font-size="8.6" fill="#64748b">port Gi1/0/3 - CAMPUS_VN</text>
+<rect x="410" y="470" width="158" height="64" rx="7" fill="#f4f6f9" stroke="#334155" stroke-width="1.6"/>
+<text x="489.0" y="488" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">BORDER-CP</text>
+<text x="489.0" y="501" text-anchor="middle" font-size="8.6" fill="#64748b">cat9000v CP + border</text>
+<text x="489.0" y="512" text-anchor="middle" font-size="8.6" fill="#64748b">LISP map-server</text>
+<text x="489.0" y="523" text-anchor="middle" font-size="8.6" fill="#64748b">198.18.128.72</text>
+<rect x="605" y="470" width="158" height="64" rx="7" fill="#f4f6f9" stroke="#334155" stroke-width="1.6"/>
+<text x="684.0" y="488" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">FUSION-R1</text>
+<text x="684.0" y="501" text-anchor="middle" font-size="8.6" fill="#64748b">cat8000v fusion</text>
+<text x="684.0" y="512" text-anchor="middle" font-size="8.6" fill="#64748b">PBR -&gt; FTD inside</text>
+<text x="684.0" y="523" text-anchor="middle" font-size="8.6" fill="#64748b">198.18.128.71</text>
+<rect x="800" y="470" width="158" height="64" rx="7" fill="#fdf0ee" stroke="#b91c1c" stroke-width="1.6"/>
+<text x="879.0" y="488" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">FTDv</text>
+<text x="879.0" y="501" text-anchor="middle" font-size="8.6" fill="#64748b">Secure Firewall TD</text>
+<text x="879.0" y="512" text-anchor="middle" font-size="8.6" fill="#64748b">Snort 3 IPS - SDA-IPS</text>
+<text x="879.0" y="523" text-anchor="middle" font-size="8.6" fill="#64748b">mgmt 198.18.128.81</text>
+<rect x="300" y="70" width="158" height="64" rx="7" fill="#eef3fe" stroke="#1d4ed8" stroke-width="1.6"/>
+<text x="379.0" y="88" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">ISE 3.5 (ise35)</text>
+<text x="379.0" y="101" text-anchor="middle" font-size="8.6" fill="#64748b">PSN - ANC + CoA origin</text>
+<text x="379.0" y="112" text-anchor="middle" font-size="8.6" fill="#64748b">pxGrid controller</text>
+<text x="379.0" y="123" text-anchor="middle" font-size="8.6" fill="#64748b">198.18.134.35</text>
+<rect x="800" y="70" width="158" height="64" rx="7" fill="#eef3fe" stroke="#1d4ed8" stroke-width="1.6"/>
+<text x="879.0" y="88" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">FMCv</text>
+<text x="879.0" y="101" text-anchor="middle" font-size="8.6" fill="#64748b">Mgmt Center</text>
+<text x="879.0" y="112" text-anchor="middle" font-size="8.6" fill="#64748b">correlation + remediation</text>
+<text x="879.0" y="123" text-anchor="middle" font-size="8.6" fill="#64748b">198.18.128.80</text>
+<rect x="690" y="250" width="158" height="64" rx="7" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="769.0" y="268" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">host-splunk</text>
+<text x="769.0" y="281" text-anchor="middle" font-size="8.6" fill="#64748b">trigger dest (outside)</text>
+<text x="769.0" y="292" text-anchor="middle" font-size="8.6" fill="#64748b">198.18.128.51 :8000</text>
+<text x="769.0" y="303" text-anchor="middle" font-size="8.6" fill="#64748b">allow -&gt; Snort inspected</text>
+<text x="20" y="30" font-size="13" font-weight="800" fill="#0f2036">C6 - IPS / Snort 3 -&gt; Rapid Threat Containment chain (SDA-Fabric)</text>
+<text x="20" y="46" font-size="9" fill="#64748b">Detection-driven auto-quarantine: an IPS DROP (not an ACL deny) triggers the ISE ANC / CoA containment loop - no human in the loop.</text>
+</svg>

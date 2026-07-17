@@ -52,6 +52,13 @@ relevant one before rebuilding:
   `/18` mgmt path (DC01 root-hint DNS; "Talos yellow" = only SSE eventing). **Caveat:** file/malware
   events don't land in FMC (No Records) + a fragile file-server story (FTD source-caching → fresh IP;
   Defender kills EICAR servers; new Alpine node not in the pyATS console cache until MCP restart).
+- [`fmc-tls-decryption.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-tls-decryption.md)
+  — **TLS Decrypt-Resign** (nearly all REST): openssl resign CA → `POST object/internalcas`;
+  `POST policy/decryptionpolicies` (defaultAction **`policyAction`**) + a `DECRYPT_RESIGN` rule
+  (`decryptionpolicyrules` subpath, `decryptionCerts`=the internal CA); attach via the ACP's
+  **`decryptionPolicySetting`** FLAT ref (PUT the ACP without `rules`); add the server's CA to the
+  policy `trustedCAs` (`ExternalCACertificate`) or the FTD resigns with "Untrusted Issuer". Proven:
+  HOST1→ISE:443 cert issuer flips real→resign-CA, `Verify return code 0` with the CA installed.
 
 > **FMC session hygiene:** FMC caps concurrent sessions per user — keep API work (`curl
 > generatetoken`, the `fmc` MCP) on one account and any GUI on a **separate** account, or the

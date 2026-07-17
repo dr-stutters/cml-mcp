@@ -1,0 +1,41 @@
+{
+  "report": "Rapid Threat Containment (C2 Stage A)",
+  "run_date": "2026-07-17",
+  "mode": "manual-live",
+  "plan": "Test Plans/Lab Designs/rapid-threat-containment.md",
+  "verdict": "PASS-with-caveat",
+  "targets": {
+    "ise35": {"address": "198.18.134.35", "role": "policy decision point + CoA origin (UDP 1700)", "reachable": true},
+    "EDGE1": {"radius_id": "10.1.0.3", "role": "fabric edge / NAD (CoA client)", "reachable": true},
+    "HOST1": {"address": "172.16.10.50", "mac": "52:54:00:03:0B:0D", "port": "Gi1/0/3", "user": "alice", "reachable": true},
+    "SHARED-SVC": {"address": "172.16.20.10", "reachable": true},
+    "host-splunk": {"address": "198.18.128.51", "reachable": true}
+  },
+  "cases": [
+    {"id": "RTC-001", "objective": "ANC policy + quarantine authz rule + deny SGACL cell exist", "result": "PASS",
+     "evidence": {"anc_policy": "Quarantine", "authz_rule_id": "14dd6556-babc-4fd1-b535-bfb604e7691a", "egress_cell_id": "f225c880-81a7-11f1-b403-de998292f169", "sgacl": "Deny_IP_Log"}},
+    {"id": "RTC-002", "objective": "baseline access (uncontained)", "result": "PASS",
+     "evidence": {"edge1_sgt": 4, "edge1_status": "Authorized", "ping_172.16.20.10": "0% loss", "ping_198.18.128.51": "0% loss"}},
+    {"id": "RTC-003", "objective": "ANC apply issues a CoA sourced from ANC", "result": "PASS",
+     "evidence": {"CoASourceComponent": "ANC", "CoAReason": "Quarantine per ANC policy", "coa_type": "Cisco CoA", "coa_port": 1700, "acct_terminate_cause": "Admin Reset"}},
+    {"id": "RTC-004", "objective": "containment effective", "result": "PASS",
+     "evidence": {"noOfActiveSession": 0, "edge1_session": "none", "ping_172.16.20.10": "100% loss", "ping_198.18.128.51": "100% loss"}},
+    {"id": "RTC-005", "objective": "release restores access", "result": "PASS",
+     "evidence": {"eap_state": "SUCCESS", "suppPortStatus": "Authorized", "edge1_sgt": 4, "lisp_mapserver_ack": "10.1.0.2 Yes", "ping_172.16.20.10": "0% loss", "ping_198.18.128.51": "0% loss"}},
+    {"id": "RTC-006", "objective": "reversibility / no residual", "result": "PASS",
+     "evidence": {"post_clear_rule": "Employees_SGT", "sgt": 4}},
+    {"id": "RTC-007", "objective": "soft SGT/SGACL re-admission (Quarantined_Systems 255 + deny cell)", "result": "PARTIAL",
+     "note": "objects configured & verified but not exercised: the quarantine CoA terminated the session instead of re-admitting into SGT 255; host supplicant stayed down until release"}
+  ],
+  "summary": {"pass": 6, "partial": 1, "fail": 0},
+  "stage_b_feasibility": {
+    "fmc_remediation_modules_present": ["pxGrid Adaptive Network Control (ANC) Policy Assignment", "pxGrid Mitigation"],
+    "verdict": "viable; EPS/ANC pxGrid-client capability to be confirmed at instance-bind time"
+  },
+  "notes": [
+    "quarantine CoA terminated the session (Admin Reset) -> stronger isolation than SGACL path",
+    "host console user is 'cisco' not root; sudo -n wpa_cli reassociate restored the supplicant",
+    "allow ~15-20s LISP EID reconvergence after re-auth before the data path returns",
+    "ISE egressmatrixcell POST via ise MCP 400s (Resource Initialization Failed) -> use direct curl"
+  ]
+}

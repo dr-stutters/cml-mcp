@@ -47,6 +47,8 @@ Test Reports/
 | Date | Verdict | Unit | Live smoke | Lab designs | Report |
 |---|---|---|---|---|---|
 | 2026-07-15 | ✅ PASS | 134/134 | CML + Windows live; others prior-validated | 4/4 PASS | [report](2026-07-15/report.md) |
+| 2026-07-16 | ⚠️ PASS-with-caveats | 22/22 (catc) | CatC live 96/97 checks | CatC-Onboarding PASS | [report](2026-07-16/report.md) |
+| 2026-07-17 | ⚠️ PASS-with-caveat | n/a (manual-live) | ISE 3.5 + SDA fabric live | RTC Stage A 6 PASS / 1 partial | [report](2026-07-17/report.md) |
 
 ## Result legend
 

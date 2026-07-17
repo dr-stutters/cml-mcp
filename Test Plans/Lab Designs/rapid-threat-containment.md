@@ -116,17 +116,18 @@ Pass criteria include the **observed 2026-07-17 result** inline (`→ ✅ …`).
   CoA is not attributable to ANC, or the endpoint cannot be restored after clear.
 - `RTC-007` is a **known partial**: the soft SGT/SGACL re-admission path is built but the observed
   CoA behaviour was full session termination, so it is recorded as ⚠️ not-a-blocker.
-- **Stage B (FMC auto-trigger) — attempted 2026-07-17, BLOCKED at pxGrid EPS.** Wiring an **FMC
-  correlation rule + ISE remediation** so an FMC event auto-invokes this ANC is **GUI-only** (FMC
-  correlation/remediation are **not in the FMC REST API**). The FMC plumbing builds fine —
-  remediation module → instance `ISE-ANC-Quarantine` (pxGrid ANC Policy Assignment) → remediation
-  type *ANC Policy for Source* — but the remediation's **ANC-policy dropdown is empty of ISE
-  policies** (only "Clears ANC Policy"). pxGrid *transport is healthy* (FMC→ISE Test = "Primary
-  host: Success"; Session Directory drives C3), so the gap is the **EPS/ANC (EndpointProtectionService)
-  capability**: FMC's ISE identity source only offers Session Directory + SXP subscriptions (no
-  ANC/EPS), and the pxGrid client isn't authorized to read ISE's ANC policies. Finishing Stage B
-  needs ISE-side pxGrid EPS authorization (Administration → pxGrid Services → Client Management).
-  This plan validates the ISE-driven containment primitive that Stage B would automate.
+- **Stage B (FMC auto-trigger) — DONE ✅ 2026-07-17.** An **FMC correlation rule + ISE remediation**
+  now auto-invokes this ANC (all **GUI-only** — FMC correlation/remediation aren't in the FMC REST
+  API). **The unlock:** the remediation's ANC-policy dropdown was empty because FMC's pxGrid client
+  lacked the **EPS/ANC** capability — fixed by adding the FMC client to the ISE **`ANC` pxGrid
+  client-group** (Administration → pxGrid Services → Client Management → Clients → Edit → Client
+  Groups = ANC); the dropdown then lists `Quarantine` immediately. Wired: remediation instance
+  `ISE-ANC-Quarantine` → remediation `Quarantine-Source` (*ANC Policy for Source* → Quarantine) →
+  correlation rule `Quarantine-on-CatC-Deny` (connection event, *Access Control Rule Name contains
+  Deny-CAMPUS-to-CatC*) → active correlation policy `RTC-Quarantine`. **Proven live:** HOST1→host-catc
+  (blocked) → FMC auto-applied ANC to alice's MAC (`GET ancendpoint` = 52:54:00:03:0B:0D / Quarantine)
+  → same `CoASourceComponent=ANC` CoA as Stage A, **no manual apply**; cleared + reassociate restored
+  her. Full recipe: [`modules/fmc-rtc-anc.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-rtc-anc.md).
 
 ## 7. Traceability matrix
 

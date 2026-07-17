@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 600" font-family="Helvetica,Arial,sans-serif">
+<rect x="0" y="0" width="980" height="600" fill="#ffffff"/>
+<defs><marker id="ah-b91c1c" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#b91c1c"/></marker></defs>
+<defs><marker id="ah-15803d" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#15803d"/></marker></defs>
+<defs><marker id="ah-1d4ed8" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#1d4ed8"/></marker></defs>
+<line x1="160" y1="500" x2="196" y2="500" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="178.0" y="494" text-anchor="middle" font-size="7.6" fill="#64748b">802.1X / MAB</text>
+<line x1="336" y1="500" x2="372" y2="500" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="354.0" y="494" text-anchor="middle" font-size="7.6" fill="#64748b">VXLAN</text>
+<line x1="512" y1="500" x2="548" y2="500" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="530.0" y="494" text-anchor="middle" font-size="7.6" fill="#64748b">L3 handoff</text>
+<line x1="688" y1="500" x2="724" y2="500" stroke="#94a3b8" stroke-width="1.6"/>
+<text x="706.0" y="494" text-anchor="middle" font-size="7.6" fill="#64748b">PBR inside</text>
+<line x1="912" y1="126" x2="864" y2="466" stroke="#1d4ed8" stroke-width="2.0" stroke-dasharray="6 4" marker-end="url(#ah-1d4ed8)"/>
+<text x="930" y="300" text-anchor="middle" font-size="8.8" font-weight="700" fill="#1d4ed8" transform="rotate(90 930 300)">SI policy: PUT blocklist + deploy</text>
+<line x1="770" y1="470" x2="662" y2="316" stroke="#b91c1c" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#ah-b91c1c)"/>
+<text x="628" y="392" text-anchor="middle" font-size="9" font-weight="700" fill="#b91c1c">listed dst</text>
+<text x="628" y="403" text-anchor="middle" font-size="8.4" fill="#b91c1c">SI DROP (pre-ACL)</text>
+<text x="628" y="414" text-anchor="middle" font-size="8.4" font-weight="700" fill="#b91c1c">100% loss</text>
+<circle cx="716" cy="393" r="9" fill="#fff" stroke="#b91c1c" stroke-width="2"/>
+<line x1="710" y1="399" x2="722" y2="387" stroke="#b91c1c" stroke-width="2"/>
+<line x1="820" y1="470" x2="806" y2="316" stroke="#15803d" stroke-width="2.0" stroke-dasharray="6 4" marker-end="url(#ah-15803d)"/>
+<text x="852" y="392" text-anchor="middle" font-size="9" font-weight="700" fill="#15803d">not listed</text>
+<text x="852" y="403" text-anchor="middle" font-size="8.4" fill="#15803d">ALLOW (same rule)</text>
+<text x="852" y="414" text-anchor="middle" font-size="8.4" font-weight="700" fill="#15803d">0% loss</text>
+<rect x="20" y="470" width="140" height="64" rx="7" fill="#eef6ef" stroke="#15803d" stroke-width="1.6"/>
+<text x="90.0" y="488" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">HOST1 / alice</text>
+<text x="90.0" y="501" text-anchor="middle" font-size="8.6" fill="#64748b">alpine endpoint</text>
+<text x="90.0" y="512" text-anchor="middle" font-size="8.6" fill="#64748b">172.16.10.50</text>
+<text x="90.0" y="523" text-anchor="middle" font-size="8.6" fill="#64748b">MAC 52:54:00:03:0B:0D</text>
+
+<rect x="196" y="470" width="140" height="64" rx="7" fill="#f4f6f9" stroke="#334155" stroke-width="1.6"/>
+<text x="266.0" y="488" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">EDGE1</text>
+<text x="266.0" y="501" text-anchor="middle" font-size="8.6" fill="#64748b">cat9000v fabric edge</text>
+<text x="266.0" y="512" text-anchor="middle" font-size="8.6" fill="#64748b">fabric-attached</text>
+<text x="266.0" y="523" text-anchor="middle" font-size="8.6" fill="#64748b">CAMPUS_VN</text>
+
+<rect x="372" y="470" width="140" height="64" rx="7" fill="#f4f6f9" stroke="#334155" stroke-width="1.6"/>
+<text x="442.0" y="488" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">BORDER-CP</text>
+<text x="442.0" y="501" text-anchor="middle" font-size="8.6" fill="#64748b">cat9000v CP + border</text>
+<text x="442.0" y="512" text-anchor="middle" font-size="8.6" fill="#64748b">LISP map-server</text>
+<text x="442.0" y="523" text-anchor="middle" font-size="8.6" fill="#64748b">198.18.128.72</text>
+
+<rect x="548" y="470" width="140" height="64" rx="7" fill="#f4f6f9" stroke="#334155" stroke-width="1.6"/>
+<text x="618.0" y="488" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">FUSION-R1</text>
+<text x="618.0" y="501" text-anchor="middle" font-size="8.6" fill="#64748b">cat8000v fusion</text>
+<text x="618.0" y="512" text-anchor="middle" font-size="8.6" fill="#64748b">PBR -> FTD inside</text>
+<text x="618.0" y="523" text-anchor="middle" font-size="8.6" fill="#64748b">198.18.128.71</text>
+
+<rect x="724" y="470" width="140" height="64" rx="7" fill="#fdf0ee" stroke="#b91c1c" stroke-width="1.6"/>
+<text x="794.0" y="488" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">FTDv</text>
+<text x="794.0" y="501" text-anchor="middle" font-size="8.6" fill="#64748b">Secure Firewall TD</text>
+<text x="794.0" y="512" text-anchor="middle" font-size="8.6" fill="#64748b">Security Intelligence</text>
+<text x="794.0" y="523" text-anchor="middle" font-size="8.6" fill="#64748b">mgmt 198.18.128.81</text>
+
+<rect x="796" y="62" width="140" height="64" rx="7" fill="#eef3fe" stroke="#1d4ed8" stroke-width="1.6"/>
+<text x="866.0" y="80" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">FMCv</text>
+<text x="866.0" y="93" text-anchor="middle" font-size="8.6" fill="#64748b">Mgmt Center</text>
+<text x="866.0" y="104" text-anchor="middle" font-size="8.6" fill="#64748b">SDA-ACP / SI policy</text>
+<text x="866.0" y="115" text-anchor="middle" font-size="8.6" fill="#64748b">198.18.128.80</text>
+
+<rect x="556" y="252" width="140" height="64" rx="7" fill="#fdf0ee" stroke="#b91c1c" stroke-width="1.6"/>
+<text x="626.0" y="270" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">host-splunk</text>
+<text x="626.0" y="283" text-anchor="middle" font-size="8.6" fill="#64748b">listed "threat" (test)</text>
+<text x="626.0" y="294" text-anchor="middle" font-size="8.6" fill="#64748b">198.18.128.51</text>
+<text x="626.0" y="305" text-anchor="middle" font-size="8.6" fill="#64748b">ACL-allowed at baseline</text>
+
+<rect x="736" y="252" width="140" height="64" rx="7" fill="#eef6ef" stroke="#15803d" stroke-width="1.6"/>
+<text x="806.0" y="270" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2a37">ISE (control)</text>
+<text x="806.0" y="283" text-anchor="middle" font-size="8.6" fill="#64748b">not listed dst</text>
+<text x="806.0" y="294" text-anchor="middle" font-size="8.6" fill="#64748b">198.18.134.35</text>
+<text x="806.0" y="305" text-anchor="middle" font-size="8.6" fill="#64748b">ACL-allowed always</text>
+
+<text x="20" y="30" font-size="13" font-weight="800" fill="#0f2036">C7 - Security Intelligence pre-ACL threat-feed blocking (SDA-Fabric)</text>
+<text x="20" y="46" font-size="9" fill="#64748b">Adding a Host object to the ACP Security-Intelligence blocklist makes the FTD drop that destination BEFORE the access-control rules run. Proof = listed dst blocked, control dst on the same allow rule still reachable.</text>
+</svg>

@@ -60,6 +60,7 @@ Test Reports/
 | 2026-07-16 | ⚠️ PASS-with-caveats | 22/22 (catc) | CatC live 96/97 checks | CatC-Onboarding PASS | [report](2026-07-16/report.md) |
 | 2026-07-17 | ⚠️ PASS-with-caveats | n/a (manual-live) | ISE 3.5 + FMC/FTD + SDA fabric live | RTC Stage A+B 12 PASS / 1 partial | [report](2026-07-17/report-ANC.pdf) |
 | 2026-07-17 | ✅ PASS | n/a (manual-live) | ISE 3.5 + FMC/FTD (Snort 3) + SDA fabric live | C6 IPS-RTC (Stage C) 6 PASS / 0 fail | [report](2026-07-17/report-C6-IPS-RTC.pdf) |
+| 2026-07-17 | ⚠️ PASS-with-caveat | n/a (manual-live) | FMC/FTD SI + SDA fabric + Splunk live | C7 Security Intelligence 5 PASS / 1 partial (D13) | [report](2026-07-17/report-C7-SI.pdf) |
 
 ## Result legend
 

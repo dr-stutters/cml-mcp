@@ -55,12 +55,21 @@ Validated by **replaying the day's real captured FTD `430002/430003` connection 
 5514 (rewriting the syslog header + `FirstPacketSecond` to "now"). They carry genuine fields —
 `AccessControlRuleAction` Allow/**Block**, `AccessControlRuleName` (`Permit-CAMPUS-Services` /
 `Deny-CAMPUS-to-CatC`), `SourceSecurityGroup` `Employees`, `User` `mitchcloud-AD\alice`, dst
-`198.18.134.35:443`. **New live events aren't flowing** because the SDA fabric east-west path is
-down — **EDGE1 `Vlan1021` (anycast GW `172.16.10.1`) line-protocol DOWN**, HOST1's edge port
-`Gi1/0/3` has **no auth session** (Closed-Auth MAB not authorizing → autostate drops the SVI).
-CML links/interfaces are all `STARTED`, so it's a **NAC/ISE fault**, not cabling — a separate fix
-(ise-engineer/catalyst-engineer). Once HOST1 authorizes and traffic crosses the FTD again, the
-dashboard fills automatically.
+`198.18.134.35:443`. Also **live-verified** once the NAC fault below was cleared: HOST1's live
+traffic through the FTD logs real `430002/430003` (host `.82` → `cisco:ftd:connection`) onto the
+same board — no replay.
+
+### NAC fault that had blocked live traffic (FIXED 2026-07-17)
+The SDA east-west path was down — **EDGE1 `Vlan1021` (anycast GW `172.16.10.1`) line-protocol
+DOWN**, because HOST1's edge port `Gi1/0/3` had **no auth session** (Closed-Auth MAB not initiating
+→ autostate drops the SVI). Diagnosis: ISE/RADIUS reachable + `current UP`, port config correct
+(`mab`, `access-session closed/port-control auto`, `PMAP_DefaultWiredDot1xClosedAuth_1X_MAB`),
+frames arriving — but **no session, no MAC-learn, no dot1x client, ISE saw zero attempts, and a
+port flap didn't clear it**: the cat9000v **edge-auth (SMD/session-manager) subsystem was wedged**.
+**Fix = reload EDGE1** (`write mem` → CML `control_node` stop/start): on reboot MAB re-authorized
+HOST1 → SVI up → HOST1→ISE 0% loss. **pyats gotcha:** after a CML node reload the cached console
+session wedges at "Press RETURN to get started!" and never reaches the EXEC prompt — verify from a
+*neighbor* node (HOST1) or restart the CML MCP to refresh the console cache.
 
 ## Alt path (richer, deferred) — eStreamer
 `CiscoSecurityCloud`'s bundled `sbg_fw_estreamer_input` pulls connection **+ intrusion + file +

@@ -1,7 +1,8 @@
 # Integration roadmap — selected build program
 
 **Chosen 2026-07-16** from the full cross-platform feature menu (28 of 41 items picked);
-**extended 2026-07-17** with 11 new items (waves 9–11, incl. unparking A5 + B8).
+**extended 2026-07-17** with 11 new items (waves 9–11, incl. unparking A5 + B8), then a
+**Wave 12** (firewall depth + Splunk NOC/SOC dashboards) added the same night.
 Sequenced into dependency-ordered waves; each wave is a working session with checkpoints,
 run like the SD-Access ISE Integration build. Base state: everything in
 [`SD-Access ISE Integration/runbook.md`](SD-Access%20ISE%20Integration/runbook.md) is live
@@ -90,6 +91,24 @@ Legend: S/M/L effort · `→` = depends on
 - [ ] **D11** Auto incident timeline (M) → C2 — when RTC fires, an agent auto-assembles the cross-platform story (FMC event → ISE CoA/MnT → Splunk logs → fabric state) into **one incident report**; the investigation side of D7
 - [ ] **D12** Chaos / what-if drills (S) — CML link conditioning (latency/loss/link-down) on fabric links via `configure_link_condition`; measure how CatC Assurance, ISE, and the wave-1 health dashboard detect and report the degradation
 - [ ] **D13** FTD SI-block / intrusion security event → Splunk (S) *(surfaced by C7)* — enabling the ACP security-event syslog (`syslogConfigFromPlatformSetting`+`enableipsSyslog`) got **connection events `430002`/`430003` flowing to Splunk**, but the **SI-block security event + `430001` intrusion event are still absent** from `index=network`; sort the delivery so **C6 IPS** drops and **C7 SI** blocks also land (one fix covers both)
+
+## Wave 12 — Firewall depth + Splunk visualisation *(added 2026-07-17, overnight)*
+*More FTD/FMC functionality + turn the firewall/fabric telemetry into NOC/SOC dashboards. Firewall-first per the standing steer.*
+
+### Firewall functionality
+- [ ] **C12** URL filtering (S) — category/reputation URL blocking on an ACP rule; prove a blocked category + the URL event (Talos URL DB reachable over the same `/18` mgmt path as C9's AMP)
+- [ ] **C13** Application control / AVC (S) — app-ID rule (block/allow by application, not port); prove with an app the FTD identifies on a CAMPUS flow
+- [ ] **C14** Encrypted Visibility Engine (EVE) (S) — enable EVE (the ACP has an `eveSetting`); classify encrypted client apps/threats without decryption; compare with C8 decrypt-resign
+- [ ] **C15** Geolocation / country blocking (S) — block by source/dest country object on an ACP rule
+- [ ] **C16** Identity-based decryption bypass (S) → C8 — a Do-Not-Decrypt rule for a sensitive category/user (e.g. Employees→finance) above the Decrypt-Resign rule; prove selective decryption
+- [ ] **D13** *(carried from Wave 11)* FTD SI-block / intrusion security event → Splunk — the prerequisite that unlocks the richest firewall dashboards
+
+### Splunk visualisation / NOC-SOC dashboards
+- [x] **V1** Firewall NOC dashboard (M) — **DONE ✅ (2026-07-17).** Live Splunk view `sda_firewall_noc` ([`dashboards/firewall-noc.xml`](SD-Access%20ISE%20Integration/dashboards/firewall-noc.xml)): allow/deny KPIs + over-time, top destinations, access-rule hits, TrustSec SGT mix, applications, blocked-connection detail, and the **C8 TLS-decryption** detail — all from the FTDv `%FTD-6-430002/430003` connection events (`rex` on the colon-KV format; `430002` for actions since block rules log begin-only)
+- [ ] **V2** Threat / RTC dashboard (M) → D13 — intrusion drops (C6), SI blocks (C7), malware blocks (C9), and the **RTC auto-quarantine** timeline (FMC event → ISE ANC → CoA), correlating `index=network` + `index=ise`
+- [ ] **V3** Decryption dashboard (S) → C8 — decrypted vs bypassed TLS sessions, resign vs untrusted, undecryptable reasons
+- [x] **V4** Single-pane NOC/SOC overview (M) — **DONE ✅ (2026-07-17).** Live Splunk view `sda_soc_noc_overview` ([`dashboards/soc-noc-overview.xml`](SD-Access%20ISE%20Integration/dashboards/soc-noc-overview.xml)): the "wall board" — firewall allow/block + TLS-decrypt KPIs, ISE auth passed/failed, over-time trends, blocked-connection threats, top users/NADs, fabric syslog volume, SGT mix. (CatC `index=catc` currently empty — add its panel when webhooks flow.)
+- [ ] **V5** Install Splunkbase apps + prebuilt dashboards (S) — Cisco Security Cloud / Secure Firewall + Cisco ISE add-ons and their CIM-mapped dashboards, populated by the live/synthetic telemetry (`splunk_generate_telemetry` for gaps)
 
 ## Parked (not selected this round)
 A6 BYOD/SCEP · B3 second edge + mobility · B7 L2 flooding ·

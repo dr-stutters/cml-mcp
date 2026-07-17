@@ -45,6 +45,13 @@ relevant one before rebuilding:
   → the FTD drops the listed dst **pre-ACL** (FMC event = *Security-Related Connection / IP Block*).
   Custom SI *list* objects are **GUI-only** (`POST sinetworklists`→405; Global-Block-List readOnly).
   **Gap:** SI/IPS `430xxx` security events don't reach Splunk via the D5 LINA syslog (D13 follow-up).
+- [`fmc-malware-file-policy.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-malware-file-policy.md)
+  — **file/malware policy**: `POST policy/filepolicies` + a `BLOCK_MALWARE_WITH_RESET` file rule
+  (all categories, `analysis:[spero,clamscan,sandbox,capacity]` = local ClamAV + cloud AMP) on an
+  ALLOW rule → EICAR blocked through the FTD (clean passes). **AMP cloud IS reachable** over the FTD
+  `/18` mgmt path (DC01 root-hint DNS; "Talos yellow" = only SSE eventing). **Caveat:** file/malware
+  events don't land in FMC (No Records) + a fragile file-server story (FTD source-caching → fresh IP;
+  Defender kills EICAR servers; new Alpine node not in the pyATS console cache until MCP restart).
 
 > **FMC session hygiene:** FMC caps concurrent sessions per user — keep API work (`curl
 > generatetoken`, the `fmc` MCP) on one account and any GUI on a **separate** account, or the

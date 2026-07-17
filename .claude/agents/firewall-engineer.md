@@ -39,6 +39,12 @@ relevant one before rebuilding:
   Generator-ID picker). **The unlock:** a custom Local Rule **won't compile under a "No Rules
   Active" base** — use an *active* base (Connectivity Over Security) or nothing drops; and an HTTP
   flow hides the payload from bare `content` (use `http_uri` or a raw non-HTTP trigger).
+- [`fmc-security-intelligence.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-security-intelligence.md)
+  — **Security Intelligence** threat-feed blocking: add a **Host/Network object** (NOT a
+  `NetworkGroup`) to the ACP SI `networks.blocklist` (`PUT …/securityintelligencepolicies/{sip}`)
+  → the FTD drops the listed dst **pre-ACL** (FMC event = *Security-Related Connection / IP Block*).
+  Custom SI *list* objects are **GUI-only** (`POST sinetworklists`→405; Global-Block-List readOnly).
+  **Gap:** SI/IPS `430xxx` security events don't reach Splunk via the D5 LINA syslog (D13 follow-up).
 
 > **FMC session hygiene:** FMC caps concurrent sessions per user — keep API work (`curl
 > generatetoken`, the `fmc` MCP) on one account and any GUI on a **separate** account, or the

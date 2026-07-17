@@ -35,6 +35,7 @@ the report fills in.
 | [wireless-nac](Lab%20Designs/wireless-nac.md) | [Wireless NAC](../Custom%20Designs/Wireless%20NAC/) | C9800 17.18 + hostapd → ISE 3.5 |
 | [firepower-sgt-enforcement](Lab%20Designs/firepower-sgt-enforcement.md) | [Firepower SGT Enforcement](../Custom%20Designs/Firepower%20SGT%20Enforcement/) | ISE 3.5 SGT → FMC/FTD Snort via pxGrid |
 | [firewall-sdwan](Lab%20Designs/firewall-sdwan.md) | [Firewall SD-WAN](../Cisco%20Validated%20Designs/Firewall%20SD-WAN/) | 6-site VTI overlay, FMC-provisioned |
+| [rapid-threat-containment](Lab%20Designs/rapid-threat-containment.md) | [SD-Access ISE Integration](../Custom%20Designs/SD-Access%20ISE%20Integration/) (C2) | ISE 3.5 ANC quarantine → CoA bounces a live SDA fabric session |
 
 ## Test levels
 
@@ -54,7 +55,7 @@ exercised manual-live via the specialist agents); ISE/Windows/CML add integratio
 ## Conventions
 
 - **Test IDs:** `<PREFIX>-NNN`, unique within a plan. Prefixes:
-  servers `CML- ISE- FMC- WIN- SPL- WLC-`; designs `NAC- WLNAC- SGT- SDWAN-`.
+  servers `CML- ISE- FMC- WIN- SPL- WLC-`; designs `NAC- WLNAC- SGT- SDWAN- RTC-`.
 - **One case per capability/tool-group**, not per tool — the Steps name the tools it
   exercises. (ISE's 184 tools → ~30 capability cases.)
 - **Test-case columns:** `ID · Objective · Steps · Expected result / pass criteria · Coverage`.

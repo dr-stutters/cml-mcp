@@ -116,11 +116,17 @@ Pass criteria include the **observed 2026-07-17 result** inline (`→ ✅ …`).
   CoA is not attributable to ANC, or the endpoint cannot be restored after clear.
 - `RTC-007` is a **known partial**: the soft SGT/SGACL re-admission path is built but the observed
   CoA behaviour was full session termination, so it is recorded as ⚠️ not-a-blocker.
-- **Out-of-scope note — Stage B (FMC auto-trigger):** wiring an **FMC correlation rule + ISE
-  remediation** so an FMC event auto-invokes this ANC is **GUI-only** (FMC correlation/remediation
-  are **not in the FMC REST API**) and depends on the FMC pxGrid client holding the **EPS/ANC**
-  capability. Tracked separately; this plan deliberately validates the ISE-driven containment
-  primitive that Stage B would automate.
+- **Stage B (FMC auto-trigger) — attempted 2026-07-17, BLOCKED at pxGrid EPS.** Wiring an **FMC
+  correlation rule + ISE remediation** so an FMC event auto-invokes this ANC is **GUI-only** (FMC
+  correlation/remediation are **not in the FMC REST API**). The FMC plumbing builds fine —
+  remediation module → instance `ISE-ANC-Quarantine` (pxGrid ANC Policy Assignment) → remediation
+  type *ANC Policy for Source* — but the remediation's **ANC-policy dropdown is empty of ISE
+  policies** (only "Clears ANC Policy"). pxGrid *transport is healthy* (FMC→ISE Test = "Primary
+  host: Success"; Session Directory drives C3), so the gap is the **EPS/ANC (EndpointProtectionService)
+  capability**: FMC's ISE identity source only offers Session Directory + SXP subscriptions (no
+  ANC/EPS), and the pxGrid client isn't authorized to read ISE's ANC policies. Finishing Stage B
+  needs ISE-side pxGrid EPS authorization (Administration → pxGrid Services → Client Management).
+  This plan validates the ISE-driven containment primitive that Stage B would automate.
 
 ## 7. Traceability matrix
 

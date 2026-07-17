@@ -1,6 +1,7 @@
 # Integration roadmap — selected build program
 
-**Chosen 2026-07-16** from the full cross-platform feature menu (28 of 41 items picked).
+**Chosen 2026-07-16** from the full cross-platform feature menu (28 of 41 items picked);
+**extended 2026-07-17** with 11 new items (waves 9–11, incl. unparking A5 + B8).
 Sequenced into dependency-ordered waves; each wave is a working session with checkpoints,
 run like the SD-Access ISE Integration build. Base state: everything in
 [`SD-Access ISE Integration/runbook.md`](SD-Access%20ISE%20Integration/runbook.md) is live
@@ -66,11 +67,36 @@ Legend: S/M/L effort · `→` = depends on
 - [ ] **B6** Fabric-in-a-box (S) — single cat9000v CP+Border+Edge (module stub exists in SD-Access Fabric)
 - [ ] **B5** Second fabric site + transit (L) → B4 — IP transit between two fabric sites; capacity check first (2+ more cat9000v)
 
+## Wave 9 — Threat depth *(added 2026-07-17)*
+*Deepen the FTD from ACL/identity blocking into full NGFW inspection. All → C1 (FTD inline, done); C6 chains into the live C2 RTC loop.*
+
+- [ ] **C6** IPS / Snort 3 → RTC (M) → C2 — custom Snort 3 rule in an intrusion policy on `SDA-ACP`, triggered live from HOST1; then a correlation rule on the **IPS event** feeds the existing ISE-ANC remediation → auto-quarantine on *detection*, not just an ACL deny
+- [ ] **C7** Threat-feed blocking / Security Intelligence (S) — custom SI list/feed on FMC; the FTD blocks a listed destination **pre-ACL**; SI event verified in FMC + Splunk
+- [ ] **C9** Malware / file policy (M) — file & malware policy on the ACP; EICAR transfer through the FTD detected/blocked; file event in FMC + Splunk *(needs an HTTP/SMB file path through the firewall — stand up a tiny web server on SHARED-SVC)*
+- [ ] **C8** TLS decryption (M) — outbound decryption with a MitchcloudCA-signed **resign/subordinate CA** on the FTD; prove with a decrypted-session event (internal HTTPS dest, e.g. Splunk web or DC01; install the CA chain on HOST1)
+
+## Wave 10 — Resilience + guest access *(added 2026-07-17)*
+*Break things on purpose; add the guest flow. Capacity check before the second FTDv.*
+
+- [ ] **B8** AAA-down drill (S, unparked) — kill ISE (or the RADIUS path) and prove the closed-auth fabric degrades safely: critical-auth / inaccessible-authentication-bypass on EDGE1, then clean recovery when ISE returns — the resilience test the lab has never run
+- [ ] **C10** FTD HA pair in fabric (M) → C1 — second FTDv, HA pair at the fusion insertion point; **stateful failover mid-ping** through the fabric (the `fmc` MCP already has the HA toolset: `fmc_form_ha`/`fmc_ha_action`/`fmc_break_ha`)
+- [ ] **A5** Guest / sponsor portal (M, unparked) — sponsor creates a guest; guest web-auths on a fabric port (redirect ACL on the cat9000v edge) → **Guests SGT**; CML feasibility check on the portal-redirect path
+
+## Wave 11 — Observability deepening *(added 2026-07-17)*
+*From logs to flows, streams, and closed-loop stories.*
+
+- [ ] **D9** NetFlow → Splunk (M) — Flexible NetFlow on EDGE1/BORDER-CP + FTD NetFlow (platform settings); needs a decode path into Splunk (Splunk Stream or a small collector → HEC) — who-talks-to-whom dashboards on real fabric traffic
+- [ ] **D10** gNMI model-driven telemetry (M) — IOS-XE gNMI/gRPC dial-out from the cat9000v (CPU, interface counters) → collector (telegraf) → Splunk HEC; streaming telemetry instead of polling/syslog
+- [ ] **D11** Auto incident timeline (M) → C2 — when RTC fires, an agent auto-assembles the cross-platform story (FMC event → ISE CoA/MnT → Splunk logs → fabric state) into **one incident report**; the investigation side of D7
+- [ ] **D12** Chaos / what-if drills (S) — CML link conditioning (latency/loss/link-down) on fabric links via `configure_link_condition`; measure how CatC Assurance, ISE, and the wave-1 health dashboard detect and report the degradation
+
 ## Parked (not selected this round)
-A5 guest/sponsor portal · A6 BYOD/SCEP · B3 second edge + mobility · B7 L2 flooding ·
-B8 AAA-down drill · D4 AD→Splunk identity-trace dashboard · F1–F3 Crosswork (CNC onboarding,
+A6 BYOD/SCEP · B3 second edge + mobility · B7 L2 flooding ·
+D4 AD→Splunk identity-trace dashboard · F1–F3 Crosswork (CNC onboarding,
 L3VPN, L2VPN) · G1 secure-by-design audit · G2 spec export/clean-room rebuild ·
 G3 compliance drift · G4 SWIM dry-run
+*(Deferred 2026-07-17, revisit after waves 9–11: G2 clean-room rebuild, F1–F3 Crosswork,
+a nightly scheduled testing-agent run, and a new companion MCP server.)*
 
 ## Standing rules for every wave
 - Checkpoint at each item boundary; disruptive steps get an explicit go/no-go.

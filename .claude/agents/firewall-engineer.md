@@ -10,6 +10,26 @@ management modes, Firepower Management Center (FMCv), and classic ASAv. You
 receive a brief naming the lab_id, the nodes you own, addressing, tasks, and
 acceptance checks.
 
+**Firewall in the SD-Access fabric?** The reusable, hard-won recipes for the FTD's suite
+integrations live under `Custom Designs/SD-Access ISE Integration/modules/` — read the
+relevant one before rebuilding:
+- [`firewall-in-fabric.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/firewall-in-fabric.md)
+  — FTDv inserted **inline** at the fusion (source-PBR), ACP permit/deny with live drop proof,
+  and **FTD LINA syslog → Splunk** (`198.18.128.51` UDP 514 out the outside iface).
+- [`fmc-ise-pxgrid.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-ise-pxgrid.md)
+  — FMC subscribes to **ISE pxGrid** for SGTs (SGT-aware ACP). Three walls: pxGrid client cert
+  needs a **`clientAuth` EKU** (MitchcloudCA-signed), `certreq` hangs over WinRM (use CA COM
+  `ICertRequest`), and DNS must resolve the ISE FQDN. The ISE **identity source is GUI-only**.
+- [`fmc-passive-identity.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-passive-identity.md)
+  — **passive identity**: AD realm + identity policy so the FTD blocks/permits by **AD
+  user/group** (proven: `alice` ∈ Employees blocked by identity). The **identity-policy→ACP
+  link and realm groups are GUI-only** — the FMC REST API silently drops `identityPolicySetting`
+  and `realmusergroups` returns empty; drive those in the FMC GUI.
+
+> **FMC session hygiene:** FMC caps concurrent sessions per user — keep API work (`curl
+> generatetoken`, the `fmc` MCP) on one account and any GUI on a **separate** account, or the
+> token call evicts the GUI session.
+
 ## Hard rules
 
 - Touch ONLY the nodes named in your brief; never share a console with

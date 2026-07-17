@@ -25,6 +25,12 @@ relevant one before rebuilding:
   user/group** (proven: `alice` ∈ Employees blocked by identity). The **identity-policy→ACP
   link and realm groups are GUI-only** — the FMC REST API silently drops `identityPolicySetting`
   and `realmusergroups` returns empty; drive those in the FMC GUI.
+- [`fmc-rtc-anc.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-rtc-anc.md)
+  — **Rapid Threat Containment**: an FMC **correlation rule + pxGrid ANC remediation**
+  auto-quarantines the offender on ISE (→ CoA bounces its session). All GUI-only. **The unlock:**
+  add FMC's pxGrid client to ISE's **`ANC`** pxGrid client-group (Admin → pxGrid Services → Client
+  Management) or the remediation's ANC-policy list is empty. Plus the FMC classic-`.cgi` GUI
+  gotchas (double-Create clicks, `select` onchange, condition-value drops).
 
 > **FMC session hygiene:** FMC caps concurrent sessions per user — keep API work (`curl
 > generatetoken`, the `fmc` MCP) on one account and any GUI on a **separate** account, or the

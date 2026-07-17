@@ -223,14 +223,16 @@ been built and validated in the live SD-Access lab (roadmap item in the last col
 | **Windows AD (DS) → FMC** | LDAP **realm** | AD user/group objects for **passive-identity** ACP rules on the FTD | C3 |
 | **Windows DNS → ISE / FMC** | DNS | resolvable CSR subject names + the ISE **FQDN** pxGrid ServiceLookup hands FMC | C5 |
 | **ISE → FMC** | **pxGrid** (TrustSec + Session Directory) | 19 **SGTs** synced to FMC objects **and** live **user↔IP sessions** the FTD enforces on | C5, C3 |
+| **FMC → ISE** | **pxGrid EPS / ANC** | **rapid threat containment** — an FMC correlation rule + remediation **auto-applies an ISE ANC quarantine** to the offender → CoA bounces its fabric session (FMC's pxGrid client must be in ISE's `ANC` client-group) | C2 |
 | **ISE ↔ switches / WLC** | RADIUS / TACACS+ | 802.1X/MAB NAC, SGT authorization, secure device admin | ISE NAC, A3, wireless |
 | **ISE ↔ Catalyst Center** | pxGrid / ERS | TrustSec data sharing + group-based access policy authoring | CatC ↔ ISE |
 | **Catalyst Center → fabric switches** | SSH / SNMP / NETCONF | discovery, inventory, SDA provisioning, Day-N **CLI templates** | SDA fabric |
 | **FTD / FMC → Splunk** | syslog (UDP 514, data-plane) | firewall connection + IPS events (e.g. the live `172.16.10.50` build/deny) | D5 |
 | **ISE / Windows / WLC → Splunk** | syslog / HEC + Splunkbase add-ons | auth logs, AD events, WLC telemetry into the SIEM (Cisco ISE / MS Windows / Cisco Security Cloud add-ons) | observability wave |
 
-The reusable recipes for the trickier edges (FMC↔ISE pxGrid, FMC passive identity, TACACS-over-TLS)
-live under [`Custom Designs/SD-Access ISE Integration/modules/`](Custom%20Designs/SD-Access%20ISE%20Integration/);
+The reusable recipes for the trickier edges (FMC↔ISE pxGrid, FMC passive identity, FMC rapid
+threat containment, TACACS-over-TLS) live under
+[`Custom Designs/SD-Access ISE Integration/modules/`](Custom%20Designs/SD-Access%20ISE%20Integration/);
 the end-to-end build order is [`Custom Designs/ROADMAP.md`](Custom%20Designs/ROADMAP.md).
 
 ## Requirements
@@ -480,7 +482,7 @@ curates that plus the lab-design proofs, and `render_pdf.py` turns a self-styled
 into a committed **`report.pdf`** (headless Chromium). Produced end-to-end by the
 **testing-agent**. Runs so far: full-suite [2026-07-15](Test%20Reports/2026-07-15/report.md)
 (**134/134 unit, lint clean, PASS**), [2026-07-16](Test%20Reports/2026-07-16/report.md)
-(catc API expansion), [2026-07-17](Test%20Reports/2026-07-17/report.md) (RTC C2 Stage A).
+(catc API expansion), [2026-07-17](Test%20Reports/2026-07-17/report-ANC.pdf) (**RTC C2 Stage A + Stage B**, 12 PASS / 1 partial — the FMC-driven auto-quarantine proven live).
 
 ## Tool reference
 

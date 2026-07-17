@@ -362,7 +362,7 @@ Things worth knowing:
 
 ## Specialist agents (Claude Code)
 
-The repo ships nine Claude Code agent definitions in
+The repo ships ten Claude Code agent definitions in
 [.claude/agents/](.claude/agents/) — other MCP clients can ignore this
 directory:
 
@@ -415,6 +415,16 @@ directory:
   transport, logging, resilience — and returns a prioritised findings report + per-
   device-group remediation briefs. Advisory only; never changes config — the main
   session fans its briefs back to the specialists above.
+- **testing-agent** — QA / validation / **reporting** specialist that owns the test
+  lifecycle: authors the formal **Test Plan**, executes it (the automated gate across
+  the six MCP repos via `Test Reports/run_report.py` + live lab-design acceptance —
+  pyATS pings/packet-tracer, ISE/FMC session lookups, Splunk searches), gathers the
+  lab's own facts (topology, hostnames, IP addressing, configs, a `screenshot_cml_ui`
+  capture), and produces a **customer-facing PDF Test Report** — a self-styled,
+  print-ready HTML report rendered to PDF by `Test Reports/render_pdf.py` (headless
+  Chromium). Read-only on built config plus reversible round-trips (ANC apply/clear,
+  create→verify→delete throwaway objects); **never remediates** — failures come back as
+  briefs the main session routes to the specialists. Owns `Test Plans/` + `Test Reports/`.
 
 The flow: the main session asks the architect to design and build (spec-first
 via `build_lab_from_spec`, whose report includes ready-made briefs), then fans
@@ -453,11 +463,11 @@ Firepower SGT Enforcement, and the **Firewall SD-WAN** CVD. See the library's
 ### Test Plans library
 
 [`Test Plans/`](Test%20Plans/) holds formal, customer-presentable **test plans** — one
-per MCP server (6) and one per validated lab design (4) — enumerating test cases
-(objective · steps · expected/pass criteria · **automation coverage**). They're the
-document counterpart to the `tests/` suites: the code *executes* the tests, the plans
-*describe* them. Each plan ends with an empty execution-record table that the
-customer-facing test report (roadmap) fills in. See the library's
+per MCP server (6) and one per validated lab design (enumerating test cases: objective ·
+steps · expected/pass criteria · **automation coverage**). They're the document counterpart
+to the `tests/` suites: the code *executes* the tests, the plans *describe* them. Each plan
+ends with an execution-record table the customer-facing test report fills in. Authored and
+maintained by the **testing-agent** as part of the QA lifecycle. See the library's
 [README](Test%20Plans/README.md).
 
 ### Test Reports library
@@ -465,9 +475,12 @@ customer-facing test report (roadmap) fills in. See the library's
 [`Test Reports/`](Test%20Reports/) is the results side: dated, customer-facing **test
 reports** that record what a given run produced (verdict, per-server/-design results,
 evidence). `run_report.py` executes the automated gate (`ruff` + `pytest`, plus live
-`smoke`/`integration` with flags) across all six repos and emits `results.json`; the
-report curates that plus the lab-design proofs. The latest run
-([2026-07-15](Test%20Reports/2026-07-15/report.md)): **134/134 unit, lint clean, PASS**.
+`smoke`/`integration` with flags) across all six repos and emits `results.json`; the report
+curates that plus the lab-design proofs, and `render_pdf.py` turns a self-styled HTML report
+into a committed **`report.pdf`** (headless Chromium). Produced end-to-end by the
+**testing-agent**. Runs so far: full-suite [2026-07-15](Test%20Reports/2026-07-15/report.md)
+(**134/134 unit, lint clean, PASS**), [2026-07-16](Test%20Reports/2026-07-16/report.md)
+(catc API expansion), [2026-07-17](Test%20Reports/2026-07-17/report.md) (RTC C2 Stage A).
 
 ## Tool reference
 

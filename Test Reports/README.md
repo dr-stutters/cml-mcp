@@ -12,11 +12,21 @@ to a customer.
 Test Reports/
   README.md            # this file
   run_report.py        # the runner — executes the automated gate across the 6 repos
+  render_pdf.py        # HTML -> report.pdf via the repo's headless Chromium (Playwright)
   _TEMPLATE.md         # report skeleton (8 sections)
   <YYYY-MM-DD>/
     report.md          # the report (canonical, committed)
     results.json       # machine-collected raw results from run_report.py
+    report.pdf         # customer-facing PDF (self-styled HTML, committed) — when produced
 ```
+
+> **Owned by [`testing-agent`](../.claude/agents/testing-agent.md).** The QA agent authors the
+> plan, executes the suite, and produces the **customer-facing PDF**: it builds a self-styled,
+> print-ready HTML report and renders it with `render_pdf.py`
+> (`.venv/bin/python "Test Reports/render_pdf.py" <report.html> "Test Reports/<date>/report.pdf"`).
+> No external design service — the built-in template stands alone (a design-system MCP could
+> style the same HTML later, but is never required). You can still hand-curate a report
+> yourself — the agent just makes it one delegable step.
 
 ## How a report is produced
 

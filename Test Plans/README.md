@@ -81,6 +81,10 @@ Reports live in the [Test Reports library](../Test%20Reports/) — see the lates
 
 ## How to add a test plan
 
+> Authored/maintained by [`testing-agent`](../.claude/agents/testing-agent.md) as part of the QA
+> lifecycle — it writes/updates the plan when we build something new, then executes + reports
+> against it (plan↔report traceability by case ID). You can also add one by hand:
+
 1. Copy [`_TEMPLATE.md`](_TEMPLATE.md) to `MCP Servers/<server>.md` or `Lab Designs/<design>.md`.
 2. Fill the 8 sections; keep the case-table columns identical.
 3. Set the Coverage column from the target's `tests/` (unit fn names / smoke / integration

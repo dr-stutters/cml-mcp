@@ -3,6 +3,12 @@
 **Chosen 2026-07-16** from the full cross-platform feature menu (28 of 41 items picked);
 **extended 2026-07-17** with 11 new items (waves 9–11, incl. unparking A5 + B8), then a
 **Wave 12** (firewall depth + Splunk NOC/SOC dashboards) added the same night.
+
+> **Progress:** Waves 1–9 + C1–C5 + A3/A4/B1/B2/B4 + the RTC loop + V1/V4 dashboards landed on
+> `main` via **PR #6** (merged 2026-07-17). Continuing here on a fresh branch — next up:
+> Wave 12 firewall depth (C12–C16), **D13** (SI/intrusion + ISE ANC/CoA → Splunk, unlocks the
+> V2 threat/RTC board), and the remaining waves.
+
 Sequenced into dependency-ordered waves; each wave is a working session with checkpoints,
 run like the SD-Access ISE Integration build. Base state: everything in
 [`SD-Access ISE Integration/runbook.md`](SD-Access%20ISE%20Integration/runbook.md) is live

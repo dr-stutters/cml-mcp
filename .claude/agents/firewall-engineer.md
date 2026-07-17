@@ -10,6 +10,60 @@ management modes, Firepower Management Center (FMCv), and classic ASAv. You
 receive a brief naming the lab_id, the nodes you own, addressing, tasks, and
 acceptance checks.
 
+**Firewall in the SD-Access fabric?** The reusable, hard-won recipes for the FTD's suite
+integrations live under `Custom Designs/SD-Access ISE Integration/modules/` — read the
+relevant one before rebuilding:
+- [`firewall-in-fabric.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/firewall-in-fabric.md)
+  — FTDv inserted **inline** at the fusion (source-PBR), ACP permit/deny with live drop proof,
+  and **FTD LINA syslog → Splunk** (`198.18.128.51` UDP 514 out the outside iface).
+- [`fmc-ise-pxgrid.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-ise-pxgrid.md)
+  — FMC subscribes to **ISE pxGrid** for SGTs (SGT-aware ACP). Three walls: pxGrid client cert
+  needs a **`clientAuth` EKU** (MitchcloudCA-signed), `certreq` hangs over WinRM (use CA COM
+  `ICertRequest`), and DNS must resolve the ISE FQDN. The ISE **identity source is GUI-only**.
+- [`fmc-passive-identity.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-passive-identity.md)
+  — **passive identity**: AD realm + identity policy so the FTD blocks/permits by **AD
+  user/group** (proven: `alice` ∈ Employees blocked by identity). The **identity-policy→ACP
+  link and realm groups are GUI-only** — the FMC REST API silently drops `identityPolicySetting`
+  and `realmusergroups` returns empty; drive those in the FMC GUI.
+- [`fmc-rtc-anc.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-rtc-anc.md)
+  — **Rapid Threat Containment**: an FMC **correlation rule + pxGrid ANC remediation**
+  auto-quarantines the offender on ISE (→ CoA bounces its session). All GUI-only. **The unlock:**
+  add FMC's pxGrid client to ISE's **`ANC`** pxGrid client-group (Admin → pxGrid Services → Client
+  Management) or the remediation's ANC-policy list is empty. Plus the FMC classic-`.cgi` GUI
+  gotchas (double-Create clicks, `select` onchange, condition-value drops).
+- [`fmc-ips-rtc.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-ips-rtc.md)
+  — **IPS / Snort 3 → RTC**: a custom Snort 3 rule (created via the **REST API** —
+  `object/intrusionrules` + `policy/intrusionpolicies` + per-policy `overrideState:DROP` +
+  access-rule `ipsPolicy`) drops on live traffic and feeds the **same** RTC-Quarantine loop via a
+  correlation rule keyed on **Rule SID** (custom rules are **GID 2000**, absent from the classic
+  Generator-ID picker). **The unlock:** a custom Local Rule **won't compile under a "No Rules
+  Active" base** — use an *active* base (Connectivity Over Security) or nothing drops; and an HTTP
+  flow hides the payload from bare `content` (use `http_uri` or a raw non-HTTP trigger).
+- [`fmc-security-intelligence.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-security-intelligence.md)
+  — **Security Intelligence** threat-feed blocking: add a **Host/Network object** (NOT a
+  `NetworkGroup`) to the ACP SI `networks.blocklist` (`PUT …/securityintelligencepolicies/{sip}`)
+  → the FTD drops the listed dst **pre-ACL** (FMC event = *Security-Related Connection / IP Block*).
+  Custom SI *list* objects are **GUI-only** (`POST sinetworklists`→405; Global-Block-List readOnly).
+  **Gap:** SI/IPS `430xxx` security events don't reach Splunk via the D5 LINA syslog (D13 follow-up).
+- [`fmc-malware-file-policy.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-malware-file-policy.md)
+  — **file/malware policy**: `POST policy/filepolicies` + a `BLOCK_MALWARE_WITH_RESET` file rule
+  (all categories, `analysis:[spero,clamscan,sandbox,capacity]` = local ClamAV + cloud AMP) on an
+  ALLOW rule → EICAR blocked through the FTD (clean passes). **AMP cloud IS reachable** over the FTD
+  `/18` mgmt path (DC01 root-hint DNS; "Talos yellow" = only SSE eventing). **Caveat:** file/malware
+  events don't land in FMC (No Records) + a fragile file-server story (FTD source-caching → fresh IP;
+  Defender kills EICAR servers; new Alpine node not in the pyATS console cache until MCP restart).
+- [`fmc-tls-decryption.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/fmc-tls-decryption.md)
+  — **TLS Decrypt-Resign** (nearly all REST): openssl resign CA → `POST object/internalcas`;
+  `POST policy/decryptionpolicies` (defaultAction **`policyAction`**) + a `DECRYPT_RESIGN` rule
+  (`decryptionpolicyrules` subpath, `decryptionCerts`=the internal CA); attach via the ACP's
+  **`decryptionPolicySetting`** FLAT ref (PUT the ACP without `rules`); add the server's CA to the
+  policy `trustedCAs` (`ExternalCACertificate`) or the FTD resigns with "Untrusted Issuer". Proven:
+  HOST1→ISE:443 cert issuer flips real→resign-CA, `Verify return code 0` with the CA installed.
+
+> **FMC session hygiene:** FMC caps concurrent sessions per user — keep API work (`curl
+> generatetoken`, the `fmc` MCP) on one account and any GUI on a **separate** account, or the
+> token call evicts the GUI session.
+
 ## Hard rules
 
 - Touch ONLY the nodes named in your brief; never share a console with

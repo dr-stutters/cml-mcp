@@ -76,3 +76,25 @@ show cts role-based permissions   # → 4:Employees→200 SDA_Web_Permit, 5→20
 ```
 A live packet-drop between two hosts is not reproducible on virtual cat9000v (see the runbook's
 "control-plane vs data-plane" note) — the SGACL matrix downloading onto the edge is the proof.
+
+## Persistence — survive a HOST1 reboot (learned the hard way)
+
+The alpine console user is **`cisco` (a sudoer, not root)** — every privileged command needs
+`sudo` (an un-`sudo`'d `wpa_supplicant` fails `socket(PF_PACKET): Operation not permitted`).
+The static IP + supplicant above are applied at **runtime only**, so a plain **reboot loses
+them** (the alpine day-0 `node.cfg` is the default template and CatC/the port-assignment don't
+touch the host). The apk-installed `wpa_supplicant` binary + `wired.conf` **do** survive a reboot
+(disk persists); only the runtime state is lost. Persist the onboarding with an OpenRC boot
+script (runs as root at boot, so no `sudo`/privilege problem):
+```sh
+sudo sh -c 'printf "#!/bin/sh\nip addr add 172.16.10.10/24 dev eth0 2>/dev/null\nip link set eth0 up\nip route add default via 172.16.10.1 2>/dev/null\n[ -x /sbin/wpa_supplicant ] && wpa_supplicant -D wired -i eth0 -c /etc/wpa_supplicant/wired.conf -B\n" > /etc/local.d/sda-endpoint.start'
+sudo chmod +x /etc/local.d/sda-endpoint.start
+sudo rc-update add local default        # enable the OpenRC `local` service (idempotent)
+```
+- **A full `wipe`** (not a reboot) reverts the disk to the base alpine image → loses the
+  apk-installed `wpa_supplicant` *and* this script, and the fabric has no internet to re-`apk`.
+  So the reproducible-from-scratch flow is still the link-surgery install above (move HOST1 to
+  the external segment, `apk add`, move back), then drop this boot script. Editing the CML
+  `node.cfg` day-0 needs the node **wiped** (config drive only regenerates on wipe), which hits
+  the same no-`wpa_supplicant` problem — hence the on-disk `/etc/local.d` script is the pragmatic
+  persistence layer.

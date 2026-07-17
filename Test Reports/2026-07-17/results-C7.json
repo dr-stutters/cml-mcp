@@ -1,0 +1,50 @@
+{
+  "report": "C7 — Security Intelligence (SI) threat-feed blocking",
+  "run_date": "2026-07-17",
+  "mode": "manual-live",
+  "plan": "Test Plans/Lab Designs/security-intelligence-blocking.md",
+  "plan_section": "SI-001..006",
+  "verdict": "PASS-with-caveat",
+  "verdict_note": "SI pre-ACL blocking PASS (SI-001..004, SI-006); SI event -> Splunk forwarding is a documented known gap (D13) recorded as partial, not a hard FAIL.",
+  "lab": {"name": "SDA-Fabric", "id": "77dd2fde-1fda-4cc9-9b29-48ff98bd1395", "state": "STARTED/converged"},
+  "versions": {
+    "ise": "3.5.0.527",
+    "fmc": "10.0.1 (build 1)",
+    "ftd": "10.0.0 (Snort 3)",
+    "fabric_edge": "cat9000v IOS-XE 17.18",
+    "fabric": "SD-Access LISP/VXLAN closed-auth"
+  },
+  "targets": {
+    "FMCv": {"address": "198.18.128.80", "role": "Mgmt Center — owns SDA-ACP + Security Intelligence policy", "reachable": true},
+    "FTDv": {"address": "198.18.128.81", "data_syslog_src": "198.18.128.82", "device_id": "37ffcab8-8126-11f1-a47b-d7a4b50be775", "role": "SI enforcer (pre-ACL drop)", "reachable": true, "health": "yellow (cosmetic; MANAGED/DEPLOYED)"},
+    "HOST1": {"address": "172.16.10.50", "mac": "52:54:00:03:0B:0D", "user": "alice", "reachable": true},
+    "host-splunk": {"address": "198.18.128.51", "role": "listed 'threat' stand-in (otherwise ACL-allowed, reachable) + Splunk SIEM", "reachable": true, "host_object_id": "5254002E-0748-0ed3-0000-004294969557"},
+    "ise35_control": {"address": "198.18.134.35", "role": "control dst — same allow rule, never listed", "reachable": true}
+  },
+  "acp": {"name": "SDA-ACP", "id": "5254002E-0748-0ed3-0000-004294968720"},
+  "si_policy": {"id": "5254002E-0748-0ed3-0000-004294968770", "baseline_blocklist": ["Global Block List"], "end_state_blocklist": ["Global Block List"]},
+  "cases": [
+    {"id": "SI-001", "objective": "Baseline (no SI block): listed dst + control dst reachable; blocklist = Global Block List only", "result": "PASS",
+     "evidence": {"si_blocklist": ["Global Block List (SINetworkList)"], "host_ip": "172.16.10.50/24 (eth0)", "ping_198.18.128.51": "0% loss (4/4, ~87ms avg)", "ping_198.18.134.35": "0% loss (4/4, ~81ms avg)", "note": "host-splunk reachable at baseline proves it is ACL-allowed, so a later block must be pre-ACL"}},
+    {"id": "SI-002", "objective": "SI REST API limits are as documented (custom SI lists GUI-only)", "result": "PASS",
+     "evidence": {"POST_sinetworklists": "HTTP 405 (method not allowed) -> custom SI list/feed objects are GUI-only", "global_block_list": "SINetworkList c76556bc-6167-11e1-88e8-479de99bfdf1, metadata.readOnly.state=true (cannot add literals via REST)", "networkgroup": "SI blocklist rejects NetworkGroup ('is not allowed in Security Intelligence Policy') -> must be a Host/Network object", "host_object": "host-splunk = Host, value 198.18.128.51"}},
+    {"id": "SI-003", "objective": "Apply: add the host-splunk Host object to networks.blocklist via PUT + deploy", "result": "PASS",
+     "evidence": {"put": "GET SI policy -> stripped links/metadata -> appended {network: host-splunk, type Host} -> PUT 200", "readback": "networks.blocklist = [Global Block List (SINetworkList), host-splunk (Host)]", "deploy": "deployment task 4294973908 -> Deployed / SUCCEEDED", "blocklistLogging": "enableLogging=true, sendLogsToSyslogServer=true, sendLogsToEventViewer=true"}},
+    {"id": "SI-004", "objective": "Verify pre-ACL block: listed dst blocked, control dst still reachable", "result": "PASS",
+     "evidence": {"ping_198.18.128.51_listed": "100% loss (0/5) -> SI-blocked", "ping_198.18.134.35_control": "0% loss (5/5) -> still reachable", "conclusion": "only the listed dst is dropped; it was ACL-allowed at baseline (SI-001) -> the drop is pre-ACL (Security Intelligence, ahead of the AC rules)"}},
+    {"id": "SI-005", "objective": "SI block event -> Splunk (SIEM telemetry)", "result": "PARTIAL",
+     "evidence": {"msgid_histogram": "index=network host=198.18.128.82 -> LINA %FTD-* (110002/111xxx/199017/302010/305011/305012/771002/780005) AND connection events 430002/430003 (16 each)", "connection_allow_events": "430002/430003 for control dst 198.18.134.35 and pre-block allows to 198.18.128.51 ARE present (AccessControlRuleAction: Allow) -> connection logging now reaches Splunk (improvement vs C6-era 'no 430xxx')", "si_block_event": "ABSENT: post-block blocked pings to 198.18.128.51 produced ZERO Splunk events; 0 events with 'AccessControlRuleAction: Block' / 'Security Intelligence' / SI category / 430001 (intrusion) in the last 45 min", "conclusion": "the SI *block* security event for the blocked dst does NOT reach the SIEM (logged to the FMC event viewer only) — the documented D13 gap holds", "classification": "known gap / partial, not a hard FAIL of C7"}},
+    {"id": "SI-006", "objective": "Revert: remove host-splunk from the SI blocklist, restore baseline", "result": "PASS",
+     "evidence": {"put": "GET -> removed host-splunk from networks.blocklist -> PUT 200; read-back blocklist = [Global Block List]", "deploy": "deployment task 4294974162 -> Deployed; deployabledevices pending=0", "ping_198.18.128.51": "0% loss (5/5) restored", "ping_198.18.134.35": "0% loss (4/4)", "end_state": "networks.blocklist = [Global Block List] (baseline)"}}
+  ],
+  "summary": {"pass": 5, "partial": 1, "fail": 0, "skip": 0, "unreachable": 0},
+  "gotchas": [
+    "POST /object/sinetworklists -> HTTP 405: custom SI list/feed objects are GUI-only over REST.",
+    "Global-Block-List is metadata.readOnly.state=true over REST: cannot add literals via API (GUI only).",
+    "SI networks.blocklist rejects NetworkGroup ('not allowed in Security Intelligence Policy') -> use a Host or Network object as the 'custom threat list' entry.",
+    "fmc_api_call won't take a JSON-object body for the SI PUT -> use curl (token via generatetoken, short TTL, re-auth per call).",
+    "Strip links/metadata from the GET body before PUT-ing the SI policy back."
+  ],
+  "known_gap_D13": "FTD security-event syslog (SI/IPS/430001 intrusion) is a separate stream from the LINA %FTD-* syslog delivered to Splunk. Connection events (430002/430003) now land, but the SI block security event does not. Carried as a D-series telemetry follow-up (would light up C6 IPS + C7 SI + connection-block events in Splunk at once).",
+  "reversibility": "no built config modified; single reversible round-trip (add Host to SI blocklist -> verify -> remove), fully undone and re-verified; lab left at baseline (blocklist = Global Block List only)."
+}

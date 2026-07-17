@@ -25,7 +25,7 @@ TrustSec micro-segmentation** (SGTs + SGACLs / group-based policy, permit/deny p
 | Thing | Value |
 |---|---|
 | Catalyst Center | `198.18.128.5` (dCloud 3.2.2; SD Access app installed) — `catc` MCP |
-| SD-Access fabric | CML lab `SDA-Fabric` id `77dd2fde-…`; fabricId `6559fad0-…`; BORDER-CP (CP, .72) + EDGE1 (Edge, .73); VN `CAMPUS_VN` (inst-id 4099), anycast `172.16.10.1/24` (VLAN 1021); FUSION-R1 (.71) outside the fabric |
+| SD-Access fabric | CML lab `SDA-Fabric` id `77dd2fde-…`; fabricId `6559fad0-…`; BORDER-CP (CP + Layer-3 Border, .72) + EDGE1 (Edge, .73); VN `CAMPUS_VN` (inst-id 4099), anycast `172.16.10.1/24` (VLAN 1021); FUSION-R1 (.71) outside the fabric |
 | Fresh ISE | **ise35** `198.18.134.35` (3.5) — up (443 open) but MCP creds stale → **401**; `ise35` MCP. Update `ISE_PASSWORD` in master `.env` + reload; then enable ERS/OpenAPI/pxGrid (fresh ISE has them off) |
 | AD / DNS / CA | `mitchcloud.lab` DC **`DC01` = `198.18.130.11`** (verified; old memory said .134.11) — `windows` MCP (AD DS, DNS, **AD CS Enterprise Root CA `Mitchcloud-Lab-Root-CA`**) |
 | Endpoints | HOST1 (alpine) on EDGE1 Gi1/0/3 (802.1X supplicant); add a 2nd endpoint for MAB |
@@ -57,6 +57,11 @@ is configured.
 - **Time:** ISE + DC NTP in sync (AD join fails on clock skew).
 
 ## Phase 1 — Border handoff + shared-services reachability  → catalyst-center-engineer + firewall/catalyst-engineer
+
+> **✅ RESOLVED (roadmap "B1", 2026-07-16).** The full CatC-driven L3 handoff is validated:
+> BORDER-CP holds the **`BORDER_NODE` (Layer-3)** role + IP-transit handoff (SVI-on-trunk on
+> cat9000v), FUSION does eBGP + NAT `default-originate`; fabric host → ISE/Splunk/CatC 100%. This
+> was the biggest CML unknown — it works. Details: [SD-Access Fabric CatC module](../SD-Access%20Fabric/modules/catc-provisioning.md) steps 11–12 + [ROADMAP](../ROADMAP.md) B1. The management-plane global-table route below is a separate, still-valid layer.
 
 Make ISE reachable from the fabric's global table (the crux above):
 - Add BORDER-CP **L3 handoff** to a transit + FUSION-R1

@@ -35,6 +35,8 @@ the report fills in.
 | [wireless-nac](Lab%20Designs/wireless-nac.md) | [Wireless NAC](../Custom%20Designs/Wireless%20NAC/) | C9800 17.18 + hostapd → ISE 3.5 |
 | [firepower-sgt-enforcement](Lab%20Designs/firepower-sgt-enforcement.md) | [Firepower SGT Enforcement](../Custom%20Designs/Firepower%20SGT%20Enforcement/) | ISE 3.5 SGT → FMC/FTD Snort via pxGrid |
 | [firewall-sdwan](Lab%20Designs/firewall-sdwan.md) | [Firewall SD-WAN](../Cisco%20Validated%20Designs/Firewall%20SD-WAN/) | 6-site VTI overlay, FMC-provisioned |
+| [rapid-threat-containment](Lab%20Designs/rapid-threat-containment.md) | [SD-Access ISE Integration](../Custom%20Designs/SD-Access%20ISE%20Integration/) (C2) | ISE 3.5 ANC quarantine → CoA bounces a live SDA fabric session |
+| [security-intelligence-blocking](Lab%20Designs/security-intelligence-blocking.md) | [SD-Access ISE Integration](../Custom%20Designs/SD-Access%20ISE%20Integration/) (C7) | FMC/FTD Security Intelligence pre-ACL block (Host object → SI blocklist) |
 
 ## Test levels
 
@@ -54,7 +56,7 @@ exercised manual-live via the specialist agents); ISE/Windows/CML add integratio
 ## Conventions
 
 - **Test IDs:** `<PREFIX>-NNN`, unique within a plan. Prefixes:
-  servers `CML- ISE- FMC- WIN- SPL- WLC-`; designs `NAC- WLNAC- SGT- SDWAN-`.
+  servers `CML- ISE- FMC- WIN- SPL- WLC-`; designs `NAC- WLNAC- SGT- SDWAN- RTC- SI-`.
 - **One case per capability/tool-group**, not per tool — the Steps name the tools it
   exercises. (ISE's 184 tools → ~30 capability cases.)
 - **Test-case columns:** `ID · Objective · Steps · Expected result / pass criteria · Coverage`.
@@ -79,6 +81,10 @@ Reports live in the [Test Reports library](../Test%20Reports/) — see the lates
 [2026-07-15](../Test%20Reports/2026-07-15/report.md).
 
 ## How to add a test plan
+
+> Authored/maintained by [`testing-agent`](../.claude/agents/testing-agent.md) as part of the QA
+> lifecycle — it writes/updates the plan when we build something new, then executes + reports
+> against it (plan↔report traceability by case ID). You can also add one by hand:
 
 1. Copy [`_TEMPLATE.md`](_TEMPLATE.md) to `MCP Servers/<server>.md` or `Lab Designs/<design>.md`.
 2. Fill the 8 sections; keep the case-table columns identical.

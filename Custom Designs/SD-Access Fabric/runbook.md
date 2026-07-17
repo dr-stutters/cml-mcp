@@ -125,6 +125,7 @@ Configure HOST1 (alpine — needs **`sudo`**): `ip addr add 172.16.10.10/24 dev 
 | EID registered | BORDER-CP `show lisp instance-id 4099 ipv4 server summary` | **Registered 1** |
 | Edge database | EDGE1 `show lisp instance-id 4099 ipv4 database` | 172.16.10.10/32 dynamic-eid |
 | Host → gateway | HOST1 `ping 172.16.10.1` | success |
+| Host → external | HOST1 `ping 198.18.134.35` | success — needs the border L3 handoff ([`catc-provisioning.md`](modules/catc-provisioning.md) steps 11–12) |
 
 ## Teardown
 
@@ -150,6 +151,13 @@ Configure HOST1 (alpine — needs **`sudo`**): `ip addr add 172.16.10.10/24 dev 
    [enable-sda-service.md](modules/enable-sda-service.md) + CatC module. Two more:
    add **Control-Plane before Edge**; **`forceSync`** a device after manual config
    changes or CatC's stale cache throws `NCSO20148`.
+8. **Provision the border role up front** — retro-fitting it needs a full fabric rebuild
+   (CatC won't update roles in-place, and won't delete the only CP while an edge exists →
+   `NCHS20529`). `borderPriority` must be **1–9** (`10` → `NCHS20300`).
+9. **CatC config-push to a re-provisioned cat9000v fails** until you `no ip ssh bulk-mode`
+   (fixes `ERROR-CONNECTION-CLOSED` / `NCIM12018`) **and** set both `aaa authentication login
+   VTY_authen` and `aaa authorization exec VTY_author` **local-first** (a re-provision re-flips
+   them RADIUS-first → `NCNP10200`). See the CatC module's push-gotcha block.
 
 ## Roadmap
 
@@ -157,9 +165,12 @@ Configure HOST1 (alpine — needs **`sudo`**): `ip addr add 172.16.10.10/24 dev 
   fusion router).
 - [`modules/fabric-in-a-box.md`](modules/fabric-in-a-box.md) — single cat9000v as
   collapsed CP+Border+Edge.
-- **Border handoff** (external reachability): eBGP BORDER-CP→FUSION per-VN VRF +
-  LISP border route-import — the layer that lets the host reach outside the fabric
-  (subject to CML VXLAN data-plane fidelity). Documented in the CLI module as "next".
+- **Border L3 handoff** (external reachability) — **✅ validated 2026-07-16** via the CatC
+  path ([`catc-provisioning.md`](modules/catc-provisioning.md) steps 11–12): the border takes
+  the **`BORDER_NODE` (Layer-3)** role + an IP-transit handoff (on cat9000v CatC renders it as
+  an **SVI on a trunk**, not a dot1Q subinterface), matched by a fusion-router eBGP + NAT
+  `default-originate`. Border redistributes the default → LISP so edges `use-petr`; fabric
+  host → ISE/Splunk/CatC 100%.
 
 ## Related
 

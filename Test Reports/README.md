@@ -12,11 +12,21 @@ to a customer.
 Test Reports/
   README.md            # this file
   run_report.py        # the runner — executes the automated gate across the 6 repos
+  render_pdf.py        # HTML -> report.pdf via the repo's headless Chromium (Playwright)
   _TEMPLATE.md         # report skeleton (8 sections)
   <YYYY-MM-DD>/
     report.md          # the report (canonical, committed)
     results.json       # machine-collected raw results from run_report.py
+    report.pdf         # customer-facing PDF (self-styled HTML, committed) — when produced
 ```
+
+> **Owned by [`testing-agent`](../.claude/agents/testing-agent.md).** The QA agent authors the
+> plan, executes the suite, and produces the **customer-facing PDF**: it builds a self-styled,
+> print-ready HTML report and renders it with `render_pdf.py`
+> (`.venv/bin/python "Test Reports/render_pdf.py" <report.html> "Test Reports/<date>/report.pdf"`).
+> No external design service — the built-in template stands alone (a design-system MCP could
+> style the same HTML later, but is never required). You can still hand-curate a report
+> yourself — the agent just makes it one delegable step.
 
 ## How a report is produced
 
@@ -47,6 +57,10 @@ Test Reports/
 | Date | Verdict | Unit | Live smoke | Lab designs | Report |
 |---|---|---|---|---|---|
 | 2026-07-15 | ✅ PASS | 134/134 | CML + Windows live; others prior-validated | 4/4 PASS | [report](2026-07-15/report.md) |
+| 2026-07-16 | ⚠️ PASS-with-caveats | 22/22 (catc) | CatC live 96/97 checks | CatC-Onboarding PASS | [report](2026-07-16/report.md) |
+| 2026-07-17 | ⚠️ PASS-with-caveats | n/a (manual-live) | ISE 3.5 + FMC/FTD + SDA fabric live | RTC Stage A+B 12 PASS / 1 partial | [report](2026-07-17/report-ANC.pdf) |
+| 2026-07-17 | ✅ PASS | n/a (manual-live) | ISE 3.5 + FMC/FTD (Snort 3) + SDA fabric live | C6 IPS-RTC (Stage C) 6 PASS / 0 fail | [report](2026-07-17/report-C6-IPS-RTC.pdf) |
+| 2026-07-17 | ⚠️ PASS-with-caveat | n/a (manual-live) | FMC/FTD SI + SDA fabric + Splunk live | C7 Security Intelligence 5 PASS / 1 partial (D13) | [report](2026-07-17/report-C7-SI.pdf) |
 
 ## Result legend
 

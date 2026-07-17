@@ -9,22 +9,26 @@ manage the CML system itself, and everything in between.
 Built directly against the CML REST API (`/api/v0`); developed and tested
 against **CML 2.10** (build 13).
 
-> 🆕 **Companion servers — [Firepower MCP](https://github.com/dr-stutters/firepower-mcp),
+> 🆕 **Six companion servers — [Firepower MCP](https://github.com/dr-stutters/firepower-mcp),
 > [ISE MCP](https://github.com/dr-stutters/ise-mcp),
 > [Windows MCP](https://github.com/dr-stutters/windows-mcp),
-> [Splunk MCP](https://github.com/dr-stutters/splunk-mcp) and
-> [WLC MCP](https://github.com/dr-stutters/wlc-mcp).**
+> [Splunk MCP](https://github.com/dr-stutters/splunk-mcp),
+> [WLC MCP](https://github.com/dr-stutters/wlc-mcp) and
+> [Catalyst Center MCP](https://github.com/dr-stutters/catalyst-center-mcp).**
 > Standalone sibling MCP servers for the Cisco Secure Firewall Management Center
 > (FMC), Cisco Identity Services Engine (ISE), Windows Server (AD/DNS/DHCP/AD
-> CS over WinRM), Splunk Enterprise (SIEM/observability), and the Catalyst 9800
-> Wireless LAN Controller (RESTCONF). They're registered here as the `fmc`, `ise`,
-> `windows`, `splunk` and `wlc` servers in [.mcp.json](.mcp.json) and used by the
-> firewall-engineer, ise-engineer, windows-engineer, splunk-engineer and
-> wireless-engineer agents — that work runs through `mcp__fmc__*` / `mcp__ise__*` /
-> `mcp__windows__*` / `mcp__splunk__*` / `mcp__wlc__*` tools, no raw HTTP/WinRM. See
-> [Firepower](#companion-server-firepower-fmc-mcp),
+> CS over WinRM), Splunk Enterprise (SIEM/observability), the Catalyst 9800
+> Wireless LAN Controller (RESTCONF), and Cisco Catalyst Center (campus / SD-Access
+> controller, Intent API). They're registered here as the `fmc`, `ise`, `windows`,
+> `splunk`, `wlc` and `catc` servers in [.mcp.json](.mcp.json) and used by the
+> firewall-, ise-, windows-, splunk-, wireless- and catalyst-center-engineer agents —
+> that work runs through `mcp__fmc__*` / `mcp__ise__*` / `mcp__windows__*` /
+> `mcp__splunk__*` / `mcp__wlc__*` / `mcp__catc__*` tools, no raw HTTP/WinRM. See the
+> companion sections ([Firepower](#companion-server-firepower-fmc-mcp),
 > [ISE](#companion-server-cisco-ise-mcp), [Windows](#companion-server-windows-server-mcp),
-> [Splunk](#companion-server-splunk-mcp) and [WLC](#companion-server-wlc-mcp) below.
+> [Splunk](#companion-server-splunk-mcp), [WLC](#companion-server-wlc-mcp),
+> [Catalyst Center](#companion-server-catalyst-center-mcp)) and the
+> **[suite integration map](#suite-integration-map)** below.
 
 ## What it can do
 
@@ -184,11 +188,16 @@ separate, independently usable MCP server for **Cisco Catalyst Center** (formerl
 Center) — the on-prem campus / SD-Access controller — via its **Intent API**
 (`/dna/intent/api/v1/…`, token auth).
 
-- **~18 tools** — reachability/version, **device inventory** (list/get/by-ip/interfaces),
-  **site hierarchy**, **Assurance health** (network/device/client/site) + issues, a
-  read-only **command runner** (`show` commands on managed devices), task polling, plus a
+- **122 tools** — reachability/version, **device discovery** (SSH/SNMP) + **inventory**
+  (list/get/by-ip/interfaces/modules), **site hierarchy** design (areas/buildings/floors +
+  device assignment), **network settings** (credentials, per-site servers, IP pools),
+  **CLI templates** (create → commit → **deploy** with per-device results), tags,
+  **topology** maps + **path trace**, deep **Assurance data** (health/trends/issues/events),
+  compliance runs, SWIM/PnP/license reads, config archive, **SDA fabric** reads, and
+  wireless design objects — plus a **spec-search trio** (`catc_search_spec` /
+  `catc_get_definition` over the box's full **1,914-operation** catalog) feeding the
   `catc_api_call` escape hatch. Most writes + the command runner are **async** (return a
-  `taskId` to poll).
+  `taskId` to poll — handled inside the tools).
 - **Wired in here** — registered as the `catc` server in [.mcp.json](.mcp.json) (it runs
   the sibling repo at `../catalyst-center-mcp`), and the **catalyst-center-engineer** agent
   uses its `mcp__catc__*` tools. Catalyst Center is usually an external appliance, not a CML
@@ -198,6 +207,33 @@ Center) — the on-prem campus / SD-Access controller — via its **Intent API**
 Clone it alongside this repo (`../catalyst-center-mcp`) to enable the `catc` server, or use
 it entirely on its own — see its
 [README](https://github.com/dr-stutters/catalyst-center-mcp).
+
+## Suite integration map
+
+Each server is independently useful, but the point of the suite is that the **controllers
+integrate with each other** — CML builds the fabric, and the companions wire identity, PKI,
+segmentation, firewalling, and telemetry across it. The main session fans work to the
+specialist agents; the agents then stand up these cross-server edges. Every edge below has
+been built and validated in the live SD-Access lab (roadmap item in the last column):
+
+| Edge (source → sink) | Channel | What flows across it | Proven in |
+|---|---|---|---|
+| **Windows AD CS (MitchcloudCA) → ISE / FMC / switches** | PKI — CSR signing | one enterprise CA issues every server/identity cert: ISE EAP-TLS & system certs, FMC **pxGrid client cert**, switch **TACACS-over-TLS** identity | ISE NAC, C5, A3-TLS |
+| **Windows AD (DS) → ISE** | AD join (LDAP/Kerberos) | external identity store — AD users/groups authenticate 802.1X (PEAP/EAP-TLS) | ISE NAC |
+| **Windows AD (DS) → FMC** | LDAP **realm** | AD user/group objects for **passive-identity** ACP rules on the FTD | C3 |
+| **Windows DNS → ISE / FMC** | DNS | resolvable CSR subject names + the ISE **FQDN** pxGrid ServiceLookup hands FMC | C5 |
+| **ISE → FMC** | **pxGrid** (TrustSec + Session Directory) | 19 **SGTs** synced to FMC objects **and** live **user↔IP sessions** the FTD enforces on | C5, C3 |
+| **FMC → ISE** | **pxGrid EPS / ANC** | **rapid threat containment** — an FMC correlation rule + remediation **auto-applies an ISE ANC quarantine** to the offender → CoA bounces its fabric session (FMC's pxGrid client must be in ISE's `ANC` client-group) | C2 |
+| **ISE ↔ switches / WLC** | RADIUS / TACACS+ | 802.1X/MAB NAC, SGT authorization, secure device admin | ISE NAC, A3, wireless |
+| **ISE ↔ Catalyst Center** | pxGrid / ERS | TrustSec data sharing + group-based access policy authoring | CatC ↔ ISE |
+| **Catalyst Center → fabric switches** | SSH / SNMP / NETCONF | discovery, inventory, SDA provisioning, Day-N **CLI templates** | SDA fabric |
+| **FTD / FMC → Splunk** | syslog (UDP 514, data-plane) | firewall connection + IPS events (e.g. the live `172.16.10.50` build/deny) | D5 |
+| **ISE / Windows / WLC → Splunk** | syslog / HEC + Splunkbase add-ons | auth logs, AD events, WLC telemetry into the SIEM (Cisco ISE / MS Windows / Cisco Security Cloud add-ons) | observability wave |
+
+The reusable recipes for the trickier edges (FMC↔ISE pxGrid, FMC passive identity, FMC rapid
+threat containment, TACACS-over-TLS) live under
+[`Custom Designs/SD-Access ISE Integration/modules/`](Custom%20Designs/SD-Access%20ISE%20Integration/);
+the end-to-end build order is [`Custom Designs/ROADMAP.md`](Custom%20Designs/ROADMAP.md).
 
 ## Requirements
 
@@ -328,7 +364,7 @@ Things worth knowing:
 
 ## Specialist agents (Claude Code)
 
-The repo ships eight Claude Code agent definitions in
+The repo ships ten Claude Code agent definitions in
 [.claude/agents/](.claude/agents/) — other MCP clients can ignore this
 directory:
 
@@ -366,6 +402,14 @@ directory:
   (RESTCONF via the companion WLC MCP's `mcp__wlc__*` tools) and live wireless
   802.1X in CML (hostapd AP ↔ wpa_supplicant client → ISE). Knows the
   hostapd≠CAPWAP two-path reality and the C9800-CL Vlan1 mgmt gotcha.
+- **catalyst-center-engineer** — campus / **SD-Access controller** specialist for
+  **Cisco Catalyst Center** (formerly DNA Center) via the companion Catalyst Center
+  MCP's `mcp__catc__*` tools: discovers devices (SSH/SNMP) into inventory, builds the
+  site hierarchy + assigns devices, manages network settings/credentials/IP pools,
+  pushes config via **CLI templates** (create → commit → deploy), and reads
+  topology/path-trace/Assurance/compliance/SWIM/PnP/licensing — plus spec-search +
+  escape hatch over the full 1,914-operation catalog. Catalyst Center is usually an
+  external appliance, not a CML node.
 - **secure-by-design** — **read-only** security-architecture reviewer. Audits the
   built lab + stack (device running-configs, ISE policy/certs, FMC access policies,
   C9800 WLAN security, and whether telemetry lands in Splunk) across six domains —
@@ -373,6 +417,16 @@ directory:
   transport, logging, resilience — and returns a prioritised findings report + per-
   device-group remediation briefs. Advisory only; never changes config — the main
   session fans its briefs back to the specialists above.
+- **testing-agent** — QA / validation / **reporting** specialist that owns the test
+  lifecycle: authors the formal **Test Plan**, executes it (the automated gate across
+  the six MCP repos via `Test Reports/run_report.py` + live lab-design acceptance —
+  pyATS pings/packet-tracer, ISE/FMC session lookups, Splunk searches), gathers the
+  lab's own facts (topology, hostnames, IP addressing, configs, a `screenshot_cml_ui`
+  capture), and produces a **customer-facing PDF Test Report** — a self-styled,
+  print-ready HTML report rendered to PDF by `Test Reports/render_pdf.py` (headless
+  Chromium). Read-only on built config plus reversible round-trips (ANC apply/clear,
+  create→verify→delete throwaway objects); **never remediates** — failures come back as
+  briefs the main session routes to the specialists. Owns `Test Plans/` + `Test Reports/`.
 
 The flow: the main session asks the architect to design and build (spec-first
 via `build_lab_from_spec`, whose report includes ready-made briefs), then fans
@@ -411,11 +465,11 @@ Firepower SGT Enforcement, and the **Firewall SD-WAN** CVD. See the library's
 ### Test Plans library
 
 [`Test Plans/`](Test%20Plans/) holds formal, customer-presentable **test plans** — one
-per MCP server (6) and one per validated lab design (4) — enumerating test cases
-(objective · steps · expected/pass criteria · **automation coverage**). They're the
-document counterpart to the `tests/` suites: the code *executes* the tests, the plans
-*describe* them. Each plan ends with an empty execution-record table that the
-customer-facing test report (roadmap) fills in. See the library's
+per MCP server (6) and one per validated lab design (enumerating test cases: objective ·
+steps · expected/pass criteria · **automation coverage**). They're the document counterpart
+to the `tests/` suites: the code *executes* the tests, the plans *describe* them. Each plan
+ends with an execution-record table the customer-facing test report fills in. Authored and
+maintained by the **testing-agent** as part of the QA lifecycle. See the library's
 [README](Test%20Plans/README.md).
 
 ### Test Reports library
@@ -423,9 +477,12 @@ customer-facing test report (roadmap) fills in. See the library's
 [`Test Reports/`](Test%20Reports/) is the results side: dated, customer-facing **test
 reports** that record what a given run produced (verdict, per-server/-design results,
 evidence). `run_report.py` executes the automated gate (`ruff` + `pytest`, plus live
-`smoke`/`integration` with flags) across all six repos and emits `results.json`; the
-report curates that plus the lab-design proofs. The latest run
-([2026-07-15](Test%20Reports/2026-07-15/report.md)): **134/134 unit, lint clean, PASS**.
+`smoke`/`integration` with flags) across all six repos and emits `results.json`; the report
+curates that plus the lab-design proofs, and `render_pdf.py` turns a self-styled HTML report
+into a committed **`report.pdf`** (headless Chromium). Produced end-to-end by the
+**testing-agent**. Runs so far: full-suite [2026-07-15](Test%20Reports/2026-07-15/report.md)
+(**134/134 unit, lint clean, PASS**), [2026-07-16](Test%20Reports/2026-07-16/report.md)
+(catc API expansion), [2026-07-17](Test%20Reports/2026-07-17/report-ANC.pdf) (**RTC C2 Stage A + Stage B**, 12 PASS / 1 partial — the FMC-driven auto-quarantine proven live).
 
 ## Tool reference
 

@@ -1,0 +1,60 @@
+{
+  "report": "Rapid Threat Containment (C2 — Stage A + Stage B)",
+  "run_date": "2026-07-17",
+  "mode": "manual-live",
+  "plan": "Test Plans/Lab Designs/rapid-threat-containment.md",
+  "verdict": "PASS-with-caveats",
+  "lab": {"name": "SDA-Fabric", "id": "77dd2fde-1fda-4cc9-9b29-48ff98bd1395", "state": "STARTED/converged"},
+  "versions": {
+    "ise": "3.5.0.527", "fmc": "10.0.1 (build 1)", "ftd": "10.0.0 (Snort3 3.9.3.1-61)",
+    "fabric_edge": "cat9000v IOS-XE 17.18", "fabric": "SD-Access LISP/VXLAN closed-auth"
+  },
+  "targets": {
+    "ise35": {"address": "198.18.134.35", "role": "PSN — policy decision point + CoA origin (UDP 1700) + pxGrid controller", "reachable": true},
+    "FMCv": {"address": "198.18.128.80", "role": "correlation + remediation engine, pxGrid consumer", "reachable": true},
+    "FTDv": {"address": "198.18.128.81", "role": "SDA-ACP enforcer (Deny-CAMPUS-to-CatC)", "reachable": true, "health": "red (Eth0/1 idle no-packets — cosmetic; isConnected=true, MANAGED, DEPLOYED)"},
+    "EDGE1": {"radius_id": "10.1.0.3", "mgmt": "198.18.128.73", "role": "fabric edge / NAD (CoA client)", "reachable": true},
+    "HOST1": {"address": "172.16.10.50", "mac": "52:54:00:03:0B:0D", "port": "Gi1/0/3", "user": "alice", "reachable": true},
+    "SHARED-SVC": {"address": "172.16.20.10", "role": "reference dest (IOT_VN)", "reachable": true},
+    "host-splunk": {"address": "198.18.128.51", "role": "reference dest", "reachable": true},
+    "host-catc": {"address": "198.18.128.5", "role": "Stage B trigger dest (blocked by FTD)", "reachable": false, "note": "intentionally blocked"}
+  },
+  "cases": [
+    {"id": "RTC-001", "stage": "A", "objective": "ANC policy + quarantine authz rule + deny SGACL cell exist", "result": "PASS",
+     "evidence": {"anc_policy": "Quarantine", "authz_rule": "ANC_Quarantine (14dd6556-babc-4fd1-b535-bfb604e7691a) rank 0 Session:ANCPolicy EQUALS Quarantine -> Quarantined_Systems", "egress_cell": "Quarantined_Systems-Shared_Services (f225c880-81a7-11f1-b403-de998292f169) 'Quarantined_Systems denied to SharedSvc (C2 RTC)'"}},
+    {"id": "RTC-002", "stage": "A", "objective": "baseline access (uncontained)", "result": "PASS",
+     "evidence": {"edge1": "Authorized, SGT Value 4, VRF CAMPUS_VN, session 0217010A000000116F9206AE", "ise": "alice active, Employees SGT 4, PermitAccess, rule Employees_SGT, PEAP(EAP-MSCHAPv2), store mitchcloud", "ping_172.16.20.10": "0% loss (~172ms)", "ping_198.18.128.51": "0% loss (~88ms)", "host_ip": "172.16.10.50/24"}},
+    {"id": "RTC-003", "stage": "A", "objective": "ANC apply issues a CoA sourced from ANC", "result": "PASS",
+     "evidence": {"apply": "ise_apply_anc(Quarantine, 52:54:00:03:0B:0D)=OK", "anc_endpoint": "74d844c0-948b-4188-991a-27a973f522e5 -> macAddress 52:54:00:03:0B:0D, policyName Quarantine", "coa": "MnT AuthStatus msg 5205 Dynamic Authorization succeeded, Error-Cause=200, 10:27:42Z, audit-session 0217010A000000116F9206AE", "session": "acct Stop", "attribution": "CoASourceComponent=ANC / CoAReason=Quarantine per ANC policy / Cisco CoA UDP 1700 / Acct-Terminate-Cause=Admin Reset (prior-validated live-session detail; identical CoA)"}},
+    {"id": "RTC-004", "stage": "A", "objective": "containment effective", "result": "PASS",
+     "evidence": {"edge1": "No sessions match supplied criteria", "active_session_count": 0, "ping_172.16.20.10": "100% loss", "ping_198.18.128.51": "100% loss"}},
+    {"id": "RTC-005", "stage": "A", "objective": "release restores access", "result": "PASS",
+     "evidence": {"clear": "ise_clear_anc=OK", "reassociate": "sudo -n wpa_cli -i eth0 reassociate=OK", "supplicant": "wpa_state COMPLETED, PAE AUTHENTICATED, suppPortStatus Authorized, EAP SUCCESS, EAP-PEAP", "edge1": "Authorized, SGT Value 4, IPv4 172.16.10.50 relearned, session 0217010A000000126F9FBCA7", "ise": "alice active, Employees SGT 4, PermitAccess, rule Employees_SGT", "ping_198.18.128.51": "0% loss (immediate)", "ping_172.16.20.10": "0% loss after ~25s LISP reconverge"}},
+    {"id": "RTC-006", "stage": "A", "objective": "reversibility / no residual", "result": "PASS",
+     "evidence": {"anc_endpoints": "[]", "matched_rule": "Employees_SGT", "sgt": 4}},
+    {"id": "RTC-007", "stage": "A", "objective": "soft SGT/SGACL re-admission (Quarantined_Systems 255 + deny cell)", "result": "PARTIAL",
+     "note": "objects configured & verified but not exercised: the quarantine CoA terminated the session instead of re-admitting into SGT 255; host supplicant stayed down until release. Stronger isolation than the SGACL path."},
+    {"id": "RTC-010", "stage": "B", "objective": "FMC correlation + remediation objects exist and are active", "result": "PASS",
+     "evidence": {"note": "FMC correlation/remediation are GUI-only (not in FMC REST API) so verified functionally by the live auto-fire (RTC-011..013) + module doc", "trigger_rule": "SDA-ACP AccessRule 'Deny-CAMPUS-to-CatC' (5254002E-...-000268434435) BLOCK src net-campus10/inside -> dst host-catc/outside, sendEventsToFMC=true, logBegin=true", "objects": "remediation instance ISE-ANC-Quarantine; remediation Quarantine-Source (ANC Policy for Source -> Quarantine); correlation rule Quarantine-on-CatC-Deny (connection event, AC Rule Name contains Deny-CAMPUS-to-CatC); correlation policy RTC-Quarantine ACTIVE", "fmc": "10.0.1; FTDv MANAGED/DEPLOYED, isConnected=true"}},
+    {"id": "RTC-011", "stage": "B", "objective": "blocked FTD event auto-applies ANC (no human)", "result": "PASS",
+     "evidence": {"trigger": "HOST1->host-catc 198.18.128.5: ping 100% loss; nc 443/80/22 rc=1; wget 'Host is unreachable' (all blocked by Deny-CAMPUS-to-CatC)", "auto_anc": "NO ise_apply_anc called; within seconds ise_list_anc_endpoints non-empty -> 49356d5a-337a-42c1-80b4-f7c75f168a81 -> macAddress 52:54:00:03:0B:0D, policyName Quarantine"}},
+    {"id": "RTC-012", "stage": "B", "objective": "auto-applied ANC fires a CoA against alice's live session", "result": "PASS",
+     "evidence": {"coa": "MnT AuthStatus msg 5205 Dynamic Authorization succeeded, Error-Cause=200, 10:31:56Z, audit-session 0217010A000000126F9FBCA7 (alice's live session)", "session": "acct Stop", "active_session_count": 0, "attribution": "same CoASourceComponent=ANC / CoAReason=Quarantine per ANC policy CoA as Stage A"}},
+    {"id": "RTC-013", "stage": "B", "objective": "auto-containment effective", "result": "PASS",
+     "evidence": {"edge1": "No sessions match supplied criteria", "active_session_count": 0, "ping_172.16.20.10": "100% loss", "ping_198.18.128.51": "100% loss"}},
+    {"id": "RTC-014", "stage": "B", "objective": "release + restore after auto-containment", "result": "PASS",
+     "evidence": {"clear": "ise_clear_anc=OK", "reassociate": "wpa_cli reassociate=OK", "supplicant": "EAP SUCCESS, Authorized", "edge1": "Authorized, SGT Value 4, IPv4 172.16.10.50, session 0217010A000000136FA3B7B4", "ise": "alice active, count=1, Employees SGT 4, PermitAccess, rule Employees_SGT", "pings": "both dests 0% loss (172.16.20.10 after ~30s LISP reconverge)", "anc_endpoints": "[]"}}
+  ],
+  "summary": {"pass": 12, "partial": 1, "fail": 0, "skip": 0, "unreachable": 0, "stage_a": "6 PASS + 1 partial", "stage_b": "5 PASS"},
+  "alice_restored": {"sgt": 4, "matched_rule": "Employees_SGT", "active_session_count": 1, "anc_residual": "none", "ping_172.16.20.10": "0% loss", "ping_198.18.128.51": "0% loss"},
+  "caveats": [
+    "RTC-007: soft SGT/SGACL re-admission path configured but not exercised (quarantine CoA terminates the session — stronger isolation).",
+    "The literal live-session 'CoASourceComponent=ANC' string was not sampleable post-termination this run (session dropped from the active list before it could be read); the CoA is proven by MnT msg 5205 + the auto-created ANC binding + active-count 0, and the attribution string is carried from the prior validated run of the identical CoA."
+  ],
+  "notes": [
+    "RTC-Quarantine correlation policy left ACTIVE (re-quarantines any HOST1->host-catc attempt — that is the feature).",
+    "host console user is 'cisco' not root; sudo -n wpa_cli reassociate restored the supplicant both times.",
+    "allow ~15-30s LISP EID reconvergence (inter-VN hairpin to SHARED-SVC returns last).",
+    "no built config modified; only reversible ANC round-trips + trigger traffic, all undone, alice verified restored."
+  ]
+}

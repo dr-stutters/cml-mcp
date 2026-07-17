@@ -129,6 +129,17 @@ This repo ships Claude Code agents in `.claude/agents/`:
   resilience, then returns a prioritised findings report + per-device-group
   remediation briefs. Advisory only - never changes config; the main session fans
   its briefs to the other specialists.
+- **testing-agent** - QA / validation / reporting specialist that owns the test
+  lifecycle for what the suite builds: authors the formal **Test Plan**, executes it
+  (the automated gate across the six MCP repos via `Test Reports/run_report.py` PLUS
+  live lab-design acceptance - pyATS pings/packet-tracer, ISE/FMC session lookups,
+  Splunk searches), gathers the lab's own facts (topology, hostnames, IP addressing,
+  configs, a `screenshot_cml_ui` capture), and produces a **customer-facing PDF Test
+  Report** (a self-styled, print-ready HTML report rendered to PDF by
+  `Test Reports/render_pdf.py` - headless Chromium). **Read-only on built config plus
+  reversible write round-trips** (ANC apply/clear, create->verify->delete throwaway
+  objects, always undone) - it **never remediates**: failures come back as briefs the
+  main session fans to the specialists. Owns both `Test Plans/` and `Test Reports/`.
 
 Protocol for lab requests involving these device families:
 
@@ -155,6 +166,13 @@ Protocol for lab requests involving these device families:
    It returns a findings report + per-device-group remediation briefs; the main
    session then fans those briefs back to the matching specialists (step 2) to apply
    the fixes - secure-by-design never changes config itself.
+6. To test/validate a build and get a report, send it to **testing-agent**. It
+   authors/updates the Test Plan, executes the suite (automated gate + live
+   acceptance, read-only + reversible round-trips), and returns a **customer-facing
+   PDF Test Report** (`Test Reports/<date>/report.pdf`) plus any per-device-group
+   remediation briefs - which the main session fans back to the specialists (step 2).
+   It never changes built config itself. (The report is a self-styled HTML page
+   rendered to PDF by `Test Reports/render_pdf.py`; no external design service.)
 
 Check the CML fabric before troubleshooting devices: whenever connectivity
 between nodes is down (no adjacency, failover "Comm Failure", dead link),

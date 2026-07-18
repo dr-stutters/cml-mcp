@@ -1,0 +1,899 @@
+{
+  "atoms": [
+    {
+      "id": "foundation/cml-lab-base",
+      "agent": "cml-lab-architect",
+      "human": "none",
+      "requires": [],
+      "provides": [
+        "lab.up",
+        "mgmt.net"
+      ],
+      "params": [
+        "topology_spec"
+      ],
+      "est": "15-40m",
+      "purpose": "Create the lab + mgmt network + external connector from the deployment topology.yaml (one build_lab_from_spec)."
+    },
+    {
+      "id": "foundation/apply-addressing",
+      "agent": "cml-lab-architect",
+      "human": "none",
+      "requires": [
+        "lab.up"
+      ],
+      "provides": [
+        "mcp.connected"
+      ],
+      "params": [
+        "addressing.yaml"
+      ],
+      "est": "5m",
+      "purpose": "Sync the deployment's mgmt IPs/hostnames from addressing.yaml into the master ../.env so every companion MCP can reach its box; reload configs."
+    },
+    {
+      "id": "foundation/windows-dc-promote",
+      "agent": "windows-engineer",
+      "human": "none",
+      "requires": [
+        "mcp.connected"
+      ],
+      "provides": [
+        "ad.domain_up"
+      ],
+      "params": [
+        "ad.domain",
+        "dc.mgmt_ip"
+      ],
+      "est": "20m",
+      "purpose": "Build the Windows Server and promote it to an AD DS domain controller."
+    },
+    {
+      "id": "foundation/windows-dns",
+      "agent": "windows-engineer",
+      "human": "none",
+      "requires": [
+        "ad.domain_up"
+      ],
+      "provides": [
+        "dns.core"
+      ],
+      "params": [
+        "ad.domain",
+        "dns.records"
+      ],
+      "est": "5m",
+      "purpose": "Forward/reverse zones + A/PTR records for ISE, the CA, and devices that need resolvable names."
+    },
+    {
+      "id": "foundation/windows-dhcp",
+      "agent": "windows-engineer",
+      "human": "none",
+      "requires": [
+        "ad.domain_up"
+      ],
+      "provides": [
+        "dhcp.scopes"
+      ],
+      "params": [
+        "dhcp.scopes"
+      ],
+      "est": "5m",
+      "purpose": "DHCP scopes for endpoints (optional \u2014 static host onboarding doesn't need it)."
+    },
+    {
+      "id": "foundation/windows-adcs-ca",
+      "agent": "windows-engineer",
+      "human": "none",
+      "requires": [
+        "ad.domain_up",
+        "dns.core"
+      ],
+      "provides": [
+        "ca.online"
+      ],
+      "params": [
+        "ca.name"
+      ],
+      "est": "10m",
+      "purpose": "Install the enterprise AD CS CA and export its root cert (feeds ISE + FTD decryption trust)."
+    },
+    {
+      "id": "foundation/ad-users-groups",
+      "agent": "windows-engineer",
+      "human": "none",
+      "requires": [
+        "ad.domain_up"
+      ],
+      "provides": [
+        "ad.users"
+      ],
+      "params": [
+        "ad.users",
+        "ad.groups"
+      ],
+      "est": "5m",
+      "purpose": "OUs, test users (alice/bob/carol), and groups (Employees\u2026) the identity + firewall stacks key off."
+    },
+    {
+      "id": "identity/ise-deploy",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "mcp.connected"
+      ],
+      "provides": [
+        "ise.reachable"
+      ],
+      "params": [
+        "ise.mgmt_ip",
+        "ise.admin_cred"
+      ],
+      "est": "10m",
+      "purpose": "Bring ISE up, base network settings, enable the API surfaces (incl. ERS)."
+    },
+    {
+      "id": "identity/ise-certs",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "ise.reachable",
+        "ca.online",
+        "dns.core"
+      ],
+      "provides": [
+        "ise.certs"
+      ],
+      "params": [
+        "ca.name",
+        "ise.fqdn"
+      ],
+      "est": "15m",
+      "purpose": "CSR \u2192 CA-signed system cert; import the root as trusted (clientAuth) for EAP + admin."
+    },
+    {
+      "id": "identity/ise-ad-join",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "ise.certs",
+        "ad.domain_up",
+        "dns.core"
+      ],
+      "provides": [
+        "ise.ad_joined"
+      ],
+      "params": [
+        "ad.domain",
+        "ad.join_user"
+      ],
+      "est": "5m",
+      "purpose": "Join ISE to AD as an external identity source."
+    },
+    {
+      "id": "identity/ise-nad-onboard",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "ise.reachable"
+      ],
+      "provides": [
+        "ise.nads"
+      ],
+      "params": [
+        "nads",
+        "radius.secret"
+      ],
+      "est": "5m",
+      "purpose": "Add the switches/WLC as RADIUS clients (NADs) + device groups."
+    },
+    {
+      "id": "identity/ise-idstores-protocols",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "ise.ad_joined"
+      ],
+      "provides": [
+        "ise.idstores"
+      ],
+      "params": [],
+      "est": "5m",
+      "purpose": "Allowed protocols + the All_User_ID_Stores identity source sequence."
+    },
+    {
+      "id": "identity/ise-policy-sets",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "ise.idstores",
+        "ise.nads"
+      ],
+      "provides": [
+        "ise.policy_sets"
+      ],
+      "params": [],
+      "est": "10m",
+      "purpose": "Wired/wireless policy set(s) with authN + authZ rules (incl. the ANC_Quarantine authz rule)."
+    },
+    {
+      "id": "identity/ise-authz-profiles-dacls",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "ise.policy_sets"
+      ],
+      "provides": [
+        "ise.authz"
+      ],
+      "params": [],
+      "est": "5m",
+      "purpose": "Authorization profiles + downloadable ACLs referenced by the authZ rules."
+    },
+    {
+      "id": "identity/ise-trustsec-sgt",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "ise.reachable"
+      ],
+      "provides": [
+        "trustsec.sgts"
+      ],
+      "params": [
+        "sgts"
+      ],
+      "est": "5m",
+      "purpose": "Security Group Tags (Employees, Quarantined_Systems, Shared-Services\u2026)."
+    },
+    {
+      "id": "identity/ise-trustsec-sgacl",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "trustsec.sgts"
+      ],
+      "provides": [
+        "trustsec.sgacls"
+      ],
+      "params": [],
+      "est": "10m",
+      "purpose": "SGACLs + the egress matrix that enforces segmentation between SGTs."
+    },
+    {
+      "id": "identity/ise-anc",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "ise.reachable"
+      ],
+      "provides": [
+        "ise.anc"
+      ],
+      "params": [],
+      "est": "5m",
+      "purpose": "ANC Quarantine policy \u2014 the Rapid Threat Containment backbone (ANC apply \u2192 CoA)."
+    },
+    {
+      "id": "access/switch-radius-dot1x",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "ise.nads",
+        "ise.policy_sets",
+        "fabric.underlay"
+      ],
+      "provides": [
+        "access.dot1x"
+      ],
+      "params": [
+        "edge.ports"
+      ],
+      "est": "15m",
+      "purpose": "cat9000v edge: 802.1X/MAB, closed-auth policy-map, RADIUS to ISE over the global SVI."
+    },
+    {
+      "id": "access/endpoint-hosts",
+      "agent": "ise-engineer",
+      "human": "none",
+      "requires": [
+        "access.dot1x",
+        "ad.users"
+      ],
+      "provides": [
+        "endpoints.authenticated"
+      ],
+      "params": [
+        "endpoints"
+      ],
+      "est": "10m",
+      "purpose": "Alpine endpoints + wpa_supplicant supplicants (MAB / PEAP-AD; EAP-TLS is open item A1)."
+    },
+    {
+      "id": "fabric/sda-underlay",
+      "agent": "catalyst-engineer",
+      "human": "none",
+      "requires": [
+        "lab.up"
+      ],
+      "provides": [
+        "fabric.underlay"
+      ],
+      "params": [
+        "underlay.igp",
+        "loopbacks"
+      ],
+      "est": "15m",
+      "purpose": "IGP underlay, loopbacks, p2p links across the fabric nodes."
+    },
+    {
+      "id": "fabric/sda-lisp-overlay",
+      "agent": "catalyst-engineer",
+      "human": "none",
+      "requires": [
+        "fabric.underlay"
+      ],
+      "provides": [
+        "fabric.overlay"
+      ],
+      "params": [
+        "fabric.roles"
+      ],
+      "est": "20m",
+      "purpose": "LISP + pub/sub; CP/border/edge roles; map-server/resolver."
+    },
+    {
+      "id": "fabric/sda-anycast-gw",
+      "agent": "catalyst-engineer",
+      "human": "none",
+      "requires": [
+        "fabric.overlay"
+      ],
+      "provides": [
+        "fabric.gateways"
+      ],
+      "params": [
+        "vns",
+        "anycast_gw"
+      ],
+      "est": "10m",
+      "purpose": "Anycast gateway SVIs per VN/VLAN on the edges."
+    },
+    {
+      "id": "fabric/sda-border-handoff",
+      "agent": "catalyst-engineer",
+      "human": "none",
+      "requires": [
+        "fabric.overlay"
+      ],
+      "provides": [
+        "fabric.handoff"
+      ],
+      "params": [
+        "border.bgp"
+      ],
+      "est": "15m",
+      "purpose": "Border external handoff (VRF-lite/BGP) toward the fusion."
+    },
+    {
+      "id": "fabric/fusion-vrf-leak",
+      "agent": "catalyst-engineer",
+      "human": "none",
+      "requires": [
+        "fabric.handoff"
+      ],
+      "provides": [
+        "fusion.leak"
+      ],
+      "params": [
+        "vrf_leak"
+      ],
+      "est": "10m",
+      "purpose": "Fusion router VRF route-leak (fabric VN \u2194 shared services / mgmt)."
+    },
+    {
+      "id": "fabric/sda-host-onboard",
+      "agent": "catalyst-engineer",
+      "human": "none",
+      "requires": [
+        "fabric.gateways",
+        "access.dot1x"
+      ],
+      "provides": [
+        "fabric.hosts"
+      ],
+      "params": [],
+      "est": "10m",
+      "purpose": "Onboard hosts on edge ports (static or closed-auth) into their VN."
+    },
+    {
+      "id": "catc/catc-reachability",
+      "agent": "catalyst-center-engineer",
+      "human": "none",
+      "requires": [
+        "mcp.connected"
+      ],
+      "provides": [
+        "catc.reachable"
+      ],
+      "params": [
+        "catc.url",
+        "catc.cred"
+      ],
+      "est": "2m",
+      "purpose": "Token auth + reachability (catc_check)."
+    },
+    {
+      "id": "catc/catc-discovery",
+      "agent": "catalyst-center-engineer",
+      "human": "none",
+      "requires": [
+        "catc.reachable",
+        "fabric.underlay"
+      ],
+      "provides": [
+        "catc.inventory"
+      ],
+      "params": [
+        "discovery.range"
+      ],
+      "est": "15m",
+      "purpose": "SSH/SNMP discovery of the fabric nodes into inventory."
+    },
+    {
+      "id": "catc/catc-site-hierarchy",
+      "agent": "catalyst-center-engineer",
+      "human": "none",
+      "requires": [
+        "catc.inventory"
+      ],
+      "provides": [
+        "catc.sites"
+      ],
+      "params": [
+        "sites"
+      ],
+      "est": "10m",
+      "purpose": "Areas/buildings/floors + assign devices to sites."
+    },
+    {
+      "id": "catc/catc-network-settings",
+      "agent": "catalyst-center-engineer",
+      "human": "none",
+      "requires": [
+        "catc.sites"
+      ],
+      "provides": [
+        "catc.settings"
+      ],
+      "params": [
+        "ip_pools",
+        "servers"
+      ],
+      "est": "10m",
+      "purpose": "Credentials, IP pools, per-site servers (DNS/DHCP/AAA)."
+    },
+    {
+      "id": "catc/catc-ise-integration",
+      "agent": "catalyst-center-engineer",
+      "human": "gui",
+      "requires": [
+        "catc.reachable",
+        "ise.certs"
+      ],
+      "provides": [
+        "catc.ise_integrated"
+      ],
+      "params": [],
+      "est": "15m",
+      "purpose": "CatC \u2194 ISE integration (pxGrid + ERS)."
+    },
+    {
+      "id": "catc/catc-fabric-provision",
+      "agent": "catalyst-center-engineer",
+      "human": "none",
+      "requires": [
+        "catc.sites",
+        "catc.ise_integrated"
+      ],
+      "provides": [
+        "catc.provisioned"
+      ],
+      "params": [],
+      "est": "20m",
+      "purpose": "Provision the fabric via CatC (fabric site, roles, VNs) \u2014 with the CLI path as fallback."
+    },
+    {
+      "id": "firewall/fmc-base",
+      "agent": "firewall-engineer",
+      "human": "none",
+      "requires": [
+        "mcp.connected"
+      ],
+      "provides": [
+        "fmc.api"
+      ],
+      "params": [
+        "fmc.mgmt_ip",
+        "fmc.cred"
+      ],
+      "est": "20m",
+      "purpose": "FMCv up, licensing, domain confirmed."
+    },
+    {
+      "id": "firewall/ftd-register",
+      "agent": "firewall-engineer",
+      "human": "none",
+      "requires": [
+        "fmc.api"
+      ],
+      "provides": [
+        "ftd.registered"
+      ],
+      "params": [
+        "ftd.mgmt_ip",
+        "reg.key"
+      ],
+      "est": "15m",
+      "purpose": "Register the FTDv to FMC (day-0 mode fixed up front)."
+    },
+    {
+      "id": "firewall/ftd-interfaces-zones",
+      "agent": "firewall-engineer",
+      "human": "none",
+      "requires": [
+        "ftd.registered"
+      ],
+      "provides": [
+        "ftd.interfaces"
+      ],
+      "params": [
+        "interfaces",
+        "zones"
+      ],
+      "est": "10m",
+      "purpose": "Physical interfaces, security zones, routing."
+    },
+    {
+      "id": "firewall/ftd-acp-base",
+      "agent": "firewall-engineer",
+      "human": "none",
+      "requires": [
+        "ftd.interfaces"
+      ],
+      "provides": [
+        "ftd.acp"
+      ],
+      "params": [
+        "objects",
+        "rules"
+      ],
+      "est": "15m",
+      "purpose": "Access-control policy + base permit/deny rules + network/host objects."
+    },
+    {
+      "id": "firewall/ftd-identity-realm",
+      "agent": "firewall-engineer",
+      "human": "none",
+      "requires": [
+        "ftd.acp",
+        "ad.domain_up"
+      ],
+      "provides": [
+        "ftd.identity"
+      ],
+      "params": [
+        "realm"
+      ],
+      "est": "15m",
+      "purpose": "FMC\u2194AD realm + identity policy for user-based rules."
+    },
+    {
+      "id": "firewall/ftd-ips",
+      "agent": "firewall-engineer",
+      "human": "none",
+      "requires": [
+        "ftd.acp"
+      ],
+      "provides": [
+        "ftd.ips"
+      ],
+      "params": [
+        "ips.policy"
+      ],
+      "est": "10m",
+      "purpose": "Intrusion policy (SDA-IPS) attached to the ACP."
+    },
+    {
+      "id": "firewall/ftd-malware-file",
+      "agent": "firewall-engineer",
+      "human": "none",
+      "requires": [
+        "ftd.acp"
+      ],
+      "provides": [
+        "ftd.files"
+      ],
+      "params": [
+        "file.policy"
+      ],
+      "est": "10m",
+      "purpose": "File/malware policy (C9-Malware)."
+    },
+    {
+      "id": "firewall/ftd-decryption",
+      "agent": "firewall-engineer",
+      "human": "none",
+      "requires": [
+        "ftd.acp",
+        "ca.online"
+      ],
+      "provides": [
+        "ftd.decrypt"
+      ],
+      "params": [
+        "resign.ca"
+      ],
+      "est": "15m",
+      "purpose": "TLS decryption: resign CA + Decrypt-Resign rule (C8) and Do-Not-Decrypt bypass (C16)."
+    },
+    {
+      "id": "firewall/ftd-url-geo-app",
+      "agent": "firewall-engineer",
+      "human": "none",
+      "requires": [
+        "ftd.acp"
+      ],
+      "provides": [
+        "ftd.depth"
+      ],
+      "params": [],
+      "est": "15m",
+      "purpose": "URL filtering (C12), application/AVC (C13), geolocation (C15) rules."
+    },
+    {
+      "id": "firewall/ftd-eve",
+      "agent": "firewall-engineer",
+      "human": "none",
+      "requires": [
+        "ftd.acp"
+      ],
+      "provides": [
+        "ftd.eve"
+      ],
+      "params": [],
+      "est": "5m",
+      "purpose": "Encrypted Visibility Engine (C14) \u2014 classify encrypted apps/threats without decryption."
+    },
+    {
+      "id": "firewall/ftd-estreamer-client",
+      "agent": "firewall-engineer",
+      "human": "gui",
+      "requires": [
+        "fmc.api"
+      ],
+      "provides": [
+        "ftd.estreamer_client"
+      ],
+      "params": [
+        "splunk.mgmt_ip",
+        "pkcs12.pass"
+      ],
+      "est": "10m",
+      "purpose": "eStreamer client cert for the Splunk box (feeds splunk-security-cloud)."
+    },
+    {
+      "id": "observability/splunk-base",
+      "agent": "splunk-engineer",
+      "human": "none",
+      "requires": [
+        "mcp.connected"
+      ],
+      "provides": [
+        "splunk.up",
+        "splunk.indexes"
+      ],
+      "params": [
+        "splunk.mgmt_ip",
+        "splunk.cred"
+      ],
+      "est": "15m",
+      "purpose": "Splunk node up; indexes ise/network/catc/health created."
+    },
+    {
+      "id": "observability/splunk-syslog-inputs",
+      "agent": "splunk-engineer",
+      "human": "none",
+      "requires": [
+        "splunk.up"
+      ],
+      "provides": [
+        "splunk.inputs"
+      ],
+      "params": [],
+      "est": "10m",
+      "purpose": "UDP inputs: 514 (cisco:ios), 5514 (cisco:ftd:syslog), 20514 (cisco:ise:syslog)."
+    },
+    {
+      "id": "observability/syslog-sources",
+      "agent": "splunk-engineer",
+      "human": "gui",
+      "requires": [
+        "splunk.inputs",
+        "fabric.overlay",
+        "ise.reachable",
+        "ftd.acp"
+      ],
+      "provides": [
+        "telemetry.syslog"
+      ],
+      "params": [],
+      "est": "15m",
+      "purpose": "Point each device's syslog at Splunk (switches \u2192 514, FTD \u2192 5514, ISE remote-logging-target \u2192 20514)."
+    },
+    {
+      "id": "observability/splunk-hec",
+      "agent": "splunk-engineer",
+      "human": "none",
+      "requires": [
+        "splunk.up"
+      ],
+      "provides": [
+        "splunk.hec"
+      ],
+      "params": [],
+      "est": "5m",
+      "purpose": "Enable HEC + tokens (CatC webhooks, cross-platform health)."
+    },
+    {
+      "id": "observability/healthcheck-cron",
+      "agent": "splunk-engineer",
+      "human": "none",
+      "requires": [
+        "splunk.hec"
+      ],
+      "provides": [
+        "telemetry.health"
+      ],
+      "params": [],
+      "est": "5m",
+      "purpose": "Scheduled cross-platform health check \u2192 HEC \u2192 index=health."
+    },
+    {
+      "id": "observability/splunk-cim",
+      "agent": "splunk-engineer",
+      "human": "external-download",
+      "requires": [
+        "splunk.up"
+      ],
+      "provides": [
+        "splunk.cim"
+      ],
+      "params": [],
+      "est": "5m",
+      "purpose": "Install the Splunk CIM add-on (Splunk_SA_CIM 8.5.0) \u2014 normalization prerequisite."
+    },
+    {
+      "id": "observability/splunk-ise-addon",
+      "agent": "splunk-engineer",
+      "human": "external-download",
+      "requires": [
+        "splunk.cim",
+        "telemetry.syslog"
+      ],
+      "provides": [
+        "splunk.ise_addon"
+      ],
+      "params": [],
+      "est": "10m",
+      "purpose": "Install the Splunk Add-on for Cisco ISE 5.0.0; index=ise CIM-parsed + its dashboards."
+    },
+    {
+      "id": "observability/splunk-security-cloud",
+      "agent": "splunk-engineer",
+      "human": "gui",
+      "requires": [
+        "splunk.up",
+        "ftd.estreamer_client"
+      ],
+      "provides": [
+        "splunk.securitycloud"
+      ],
+      "params": [],
+      "est": "20m",
+      "purpose": "Install Cisco Security Cloud 4.0 + wire the eStreamer input (V6/V8) \u2192 real Conn/Intrusion/File/Malware."
+    },
+    {
+      "id": "observability/splunk-dashboards",
+      "agent": "splunk-engineer",
+      "human": "none",
+      "requires": [
+        "splunk.securitycloud",
+        "telemetry.syslog"
+      ],
+      "provides": [
+        "splunk.dashboards"
+      ],
+      "params": [],
+      "est": "10m",
+      "purpose": "Deploy the four committed dashboards (firewall-noc, soc-noc-overview, threat-rtc, tls-decryption)."
+    },
+    {
+      "id": "wireless/wlc-base",
+      "agent": "wireless-engineer",
+      "human": "none",
+      "requires": [
+        "mcp.connected"
+      ],
+      "provides": [
+        "wlc.restconf"
+      ],
+      "params": [
+        "wlc.mgmt_ip",
+        "wlc.cred"
+      ],
+      "est": "10m",
+      "purpose": "C9800 RESTCONF up (aaa new-model, priv-15 user, http secure-server, restconf)."
+    },
+    {
+      "id": "wireless/wlc-radius-ise",
+      "agent": "wireless-engineer",
+      "human": "none",
+      "requires": [
+        "wlc.restconf",
+        "ise.nads"
+      ],
+      "provides": [
+        "wlc.aaa"
+      ],
+      "params": [],
+      "est": "10m",
+      "purpose": "RADIUS server + AAA group + dot1x method list to ISE; onboard the WLC as an ISE NAD."
+    },
+    {
+      "id": "wireless/wlc-wlan-dot1x",
+      "agent": "wireless-engineer",
+      "human": "none",
+      "requires": [
+        "wlc.aaa"
+      ],
+      "provides": [
+        "wlc.wlan"
+      ],
+      "params": [
+        "ssid"
+      ],
+      "est": "10m",
+      "purpose": "802.1X WLAN + policy/site/RF tags."
+    },
+    {
+      "id": "wireless/hostapd-dot1x",
+      "agent": "wireless-engineer",
+      "human": "none",
+      "requires": [
+        "ise.policy_sets",
+        "ad.users"
+      ],
+      "provides": [
+        "wireless.authenticated"
+      ],
+      "params": [],
+      "est": "15m",
+      "purpose": "Live 802.1X via CML's hostapd AP + wpa_supplicant (hostapd != CAPWAP)."
+    },
+    {
+      "id": "validate/deployment-acceptance",
+      "agent": "testing-agent",
+      "human": "none",
+      "requires": [],
+      "provides": [
+        "validated"
+      ],
+      "params": [
+        "deployment"
+      ],
+      "est": "30m",
+      "purpose": "Author/update the Test Plan, run the automated gate + live acceptance against the deployment's provides, produce the PDF Test Report."
+    }
+  ]
+}

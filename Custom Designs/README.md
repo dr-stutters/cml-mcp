@@ -1,65 +1,57 @@
 # Custom Designs library
 
 A knowledge library of **our own** lab designs — the counterpart to
-[`Cisco Validated Designs/`](../Cisco%20Validated%20Designs/). Where the CVD
-library distills *official* Cisco reference designs from their PDFs, this one
-captures designs **we build and validate ourselves** in CML, written up as
-**repeatable runbooks** so the specialist agents in
-[`.claude/agents/`](../.claude/agents/) can rebuild them end-to-end.
+[`Cisco Validated Designs/`](../Cisco%20Validated%20Designs/). Where the CVD library distills
+*official* Cisco reference designs from their PDFs, this one captures designs **we build and
+validate ourselves** in CML, as **repeatable runbooks** the specialist agents in
+[`.claude/agents/`](../.claude/agents/) execute end-to-end.
 
-## How it works
+## Structure (composable atomic runbooks)
 
-- **One subfolder per design.** No source PDFs to gitignore here — everything is
-  our own content, so it's all committed.
-- **`runbook.md`** in each folder is the end-to-end, repeatable build: prerequisites,
-  topology, stage-by-stage config (ISE / switch / endpoint), verification, teardown,
-  and the hard-won gotchas. Written for an agent (or a human) to execute top to
-  bottom.
-- **`modules/`** (optional) holds focused per-capability runbooks that layer onto
-  the base build — mix in only what you need. The `runbook.md` links to them.
-- The relevant **specialist agent** is updated with a pointer to the runbook, so
-  "rebuild the X lab" pulls straight from here.
+The lab is disposable; this library is the source of truth. It's organised as small,
+independently-runnable **atoms** composed into **deployments** — read
+**[`REBUILD.md`](REBUILD.md)** for the full convention (the atom contract, the
+`requires`/`provides` state graph, the `human:` taxonomy, the `.env`/addressing boundary).
 
-> Runbooks are grounded in a real, validated build — the commands, object names,
-> and lab IPs are what actually worked. Treat the **IPs/ids as lab-specific**
-> (adjust for your environment); treat the **sequence, gotchas, and API shapes**
-> as the reusable part.
+- **[`Runbooks/`](Runbooks/)** — the atomic library: 56 atoms across 9 categories
+  (`foundation` · `identity` · `access` · `fabric` · `catc` · `firewall` · `observability` ·
+  `wireless` · `validate`). Each atom is a contract — declares the state it needs, does one job,
+  verifies its result — so any atom runs standalone. [`_scaffold.py`](Runbooks/_scaffold.py)
+  generates the stubs + category READMEs and validates the dependency graph.
+- **[`Deployments/`](Deployments/)** — a deployment = an ordered atom list +
+  one gitignored `addressing.yaml` (the per-build IP/hostname/cert/credential-reference plan;
+  copy from the committed `addressing.example.yaml`). First up:
+  [`sda-ise-integration`](Deployments/sda-ise-integration/).
+- **[`Old/`](Old/)** — the previous monolithic per-design runbooks, **archived**. They're the
+  proven procedures we mine to fill each atom's `Steps` during the first clean-room rebuild;
+  once an atom is proven, the atom is the truth and `Old/` is history.
 
-## Index
+## Archived designs (`Old/`)
 
-**Full lab designs**
+Reference material — validated builds, now decomposed into atoms:
 
-| Design | Runbook | Status | Related agents |
-|---|---|---|---|
-| [CatC Onboarding](CatC%20Onboarding/) | [runbook.md](CatC%20Onboarding/runbook.md) + [topology.yaml](CatC%20Onboarding/topology.yaml) | ✅ validated (Catalyst Center 3.2.2; 2×cat8000v + cat9000v discovered, sited, OSPF fabric) | catalyst-center-engineer, cml-lab-architect, catalyst-engineer |
-| [SD-Access Fabric](SD-Access%20Fabric/) | [runbook.md](SD-Access%20Fabric/runbook.md) + [CLI](SD-Access%20Fabric/modules/cli-provisioning.md)/[CatC](SD-Access%20Fabric/modules/catc-provisioning.md)/[enable-service](SD-Access%20Fabric/modules/enable-sda-service.md) modules + 2 roadmap + [topology.yaml](SD-Access%20Fabric/topology.yaml) | ✅ **both paths validated** (no ISE; host EID registered on cat9000v 17.18) — CLI LISP **and** full CatC-driven (after installing the SD Access app; NCSP11008 resolved) + **border L3 handoff → external reachability validated** (CP+Layer-3-Border + IP-transit handoff, cat9000v SVI-on-trunk, fusion eBGP+NAT) | catalyst-center-engineer, catalyst-engineer, cml-lab-architect |
-| [SD-Access ISE Integration](SD-Access%20ISE%20Integration/) | [runbook.md](SD-Access%20ISE%20Integration/runbook.md) + 5 modules + [PLAN.md](SD-Access%20ISE%20Integration/PLAN.md) | ✅ validated (fresh ISE 3.5 → `mitchcloud.lab` AD + CatC ACTIVE, all certs MitchcloudCA; Closed Auth — **MAB→SGT IoT** & **802.1X PEAP/AD→SGT Employees** live; SGACL matrix programmed on the edge, data-plane drop is a documented CML limit; **VN → external via border L3 handoff (B1), HOST1 alice→SGT4→ISE/Splunk 100%; VN DHCP/DNS off the DC (B2)**) | ise-engineer, catalyst-center-engineer, windows-engineer, catalyst-engineer |
-| [ISE NAC Lab](ISE%20NAC%20Lab/) | [runbook.md](ISE%20NAC%20Lab/runbook.md) + 4 modules | ✅ validated (ISE 3.4/3.5, cat9000v) | ise-engineer, catalyst-engineer, windows-engineer |
-| [Wireless NAC](Wireless%20NAC/) | [runbook.md](Wireless%20NAC/runbook.md) | ✅ validated (cat9800 17.18 + hostapd → ISE 3.5) | wireless-engineer, ise-engineer |
-| [Firepower SGT Enforcement](Firepower%20SGT%20Enforcement/) | [runbook.md](Firepower%20SGT%20Enforcement/runbook.md) + [pxGrid GUI module](Firepower%20SGT%20Enforcement/modules/pxgrid-gui-workflow.md) + [topology.yaml](Firepower%20SGT%20Enforcement/topology.yaml) | ✅ validated (ISE 3.5 SGT → FMC/FTD Snort via pxGrid, permit/deny proven) | ise-engineer, firewall-engineer, catalyst-engineer |
-| [Windows DC Foundation](Windows%20DC%20Foundation/) | [runbook.md](Windows%20DC%20Foundation/runbook.md) | ✅ validated clean-room (Server 2022 → `mitchcloud.lab` DC + DNS + enterprise CA, via MCP + master `.env`) | windows-engineer |
+| Design | Runbook |
+|---|---|
+| [CatC Onboarding](Old/CatC%20Onboarding/runbook.md) | Catalyst Center discovery + siting |
+| [SD-Access Fabric](Old/SD-Access%20Fabric/runbook.md) | CLI + CatC fabric, border L3 handoff |
+| [SD-Access ISE Integration](Old/SD-Access%20ISE%20Integration/runbook.md) | the full stack (fabric + ISE + AD + CatC + firewall + Splunk) |
+| [ISE NAC Lab](Old/ISE%20NAC%20Lab/runbook.md) | ISE 3.4/3.5 + cat9000v NAC |
+| [Wireless NAC](Old/Wireless%20NAC/runbook.md) | cat9800 + hostapd → ISE |
+| [Firepower SGT Enforcement](Old/Firepower%20SGT%20Enforcement/runbook.md) | ISE SGT → FTD Snort via pxGrid |
+| [Windows DC Foundation](Old/Windows%20DC%20Foundation/runbook.md) | Server 2022 → DC + DNS + CA |
+| [FMC-Managed FTD Registration](Old/FMC-Managed%20FTD%20Registration/runbook.md) | FTD → FMC register |
+| [Secure Firewall SD-WAN Auto-VPN](Old/Secure%20Firewall%20SD-WAN%20Auto-VPN/runbook.md) | route-based SD-WAN overlay |
+| [FTD Dual-ISP ECMP + Failover](Old/FTD%20Dual-ISP%20ECMP%20+%20Failover/runbook.md) | multi-transport WAN |
+| [FTD Overlay LAN Redistribution](Old/FTD%20Overlay%20LAN%20Redistribution/runbook.md) | IGP → BGP overlay |
+| [FTD Dual-Hub Redundancy](Old/FTD%20Dual-Hub%20Redundancy/runbook.md) | secondary hub / RRs |
+| [FTD HA Pair (FMC)](Old/FTD%20HA%20Pair%20(FMC)/runbook.md) | active/standby FTD |
 
-**Reusable components** — building blocks the end-to-end
-[Firewall SD-WAN](../Cisco%20Validated%20Designs/Firewall%20SD-WAN/runbook.md) CVD
-stitches together (usable on their own in any FMC/FTD lab):
+## Working with the library
 
-| Component | Reuse | Agent |
-|---|---|---|
-| [FMC-Managed FTD Registration](FMC-Managed%20FTD%20Registration/runbook.md) | any FMC-managed FTD lab | firewall-engineer |
-| [Secure Firewall SD-WAN Auto-VPN](Secure%20Firewall%20SD-WAN%20Auto-VPN/runbook.md) | route-based SD-WAN overlay | firewall-engineer |
-| [FTD Dual-ISP ECMP + Failover](FTD%20Dual-ISP%20ECMP%20+%20Failover/runbook.md) | multi-transport WAN | firewall-engineer |
-| [FTD Overlay LAN Redistribution](FTD%20Overlay%20LAN%20Redistribution/runbook.md) | OSPF/EIGRP/eBGP → BGP overlay | firewall-engineer |
-| [FTD Dual-Hub Redundancy](FTD%20Dual-Hub%20Redundancy/runbook.md) | secondary hub / route reflectors | firewall-engineer |
-| [FTD HA Pair (FMC)](FTD%20HA%20Pair%20(FMC)/runbook.md) | active/standby FTD | firewall-engineer |
-
-## How to add a design
-
-1. Create `Custom Designs/<Design Name>/`.
-2. Write `runbook.md` — grounded in an actual build: **Prerequisites · Topology ·
-   Stage-by-stage config · Verification · Teardown · Gotchas.** Use real commands
-   and note which values are lab-specific.
-3. Optionally split advanced capabilities into `modules/<capability>.md` and link
-   them from `runbook.md`.
-4. Update the relevant agent(s) in `.claude/agents/` with a pointer to the runbook,
-   and extend the frontmatter `description` if it should trigger on new keywords.
-5. Add a row to the index table above.
+- **Add / edit an atom:** edit the catalog in [`Runbooks/_scaffold.py`](Runbooks/_scaffold.py),
+  re-run it (`python3 "Custom Designs/Runbooks/_scaffold.py"`) to regenerate the stub + READMEs +
+  `catalog.json` and re-validate the DAG, then fill the atom's `Steps`/`Rollback`.
+- **Add a deployment:** create `Deployments/<name>/` with a `deployment.yaml` (ordered atoms +
+  `human_touchpoints`), an `addressing.example.yaml`, and a `topology.yaml`.
+- **Execute:** the main session fans atoms out to the matching specialist agents in
+  `deployment.yaml` order — see the example prompts in [`REBUILD.md`](REBUILD.md).

@@ -59,6 +59,17 @@ relevant one before rebuilding:
   **`decryptionPolicySetting`** FLAT ref (PUT the ACP without `rules`); add the server's CA to the
   policy `trustedCAs` (`ExternalCACertificate`) or the FTD resigns with "Untrusted Issuer". Proven:
   HOST1→ISE:443 cert issuer flips real→resign-CA, `Verify return code 0` with the CA installed.
+- [`splunk-security-cloud.md`](../../Custom%20Designs/SD-Access%20ISE%20Integration/modules/splunk-security-cloud.md)
+  — **firewall telemetry → Splunk *Cisco Security Cloud* dashboard** (your side = the FMC/FTD feed).
+  **eStreamer (full fidelity):** FMC Integrations → eStreamer → enable event types → **Create Client**
+  for the Splunk box IP → download the pkcs12 (GUI-only; enabling eStreamer opens FMC:**8302**);
+  splunk-engineer loads it into the app's eStreamer input → real **Connection/Intrusion/File/Malware**.
+  **Syslog (connection-only):** re-point the FTD platform-settings syslog server to Splunk **UDP 5514**
+  (`cisco:ftd:syslog`). **eStreamer closes the D13 gap** — the SI/IPS/file/malware `430xxx` events reach
+  Splunk via eStreamer even though LINA syslog didn't carry them. Real-data triggers: **C6 intrusion**
+  = raw `nc … 198.18.134.35 443` (HTTP normalization on :80/:8000 hides the `content` rule); **C9
+  malware** = HOST1 *uploads* EICAR (`wget --post-data`, file policy `direction:ANY`) → sidesteps the
+  EICAR-server-placement problem (CAMPUS can't reach a controllable server host).
 
 > **FMC session hygiene:** FMC caps concurrent sessions per user — keep API work (`curl
 > generatetoken`, the `fmc` MCP) on one account and any GUI on a **separate** account, or the

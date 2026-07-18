@@ -37,10 +37,14 @@ naming the Splunk target, the sources, and what to ingest/build.
 ## The lab Splunk (this environment)
 
 - **splunk2 - the primary** (CML `ubuntu` KVM node, real **4 vCPU / 16 GB**):
-  `198.18.128.51`, Splunk Enterprise **10.4.1**, installed on-box, systemd-managed
-  (`Splunkd.service`). Web `:8000`, mgmt `:8089`, HEC `:8088`. OS login
-  `cisco`/`cisco` (passwordless sudo); Splunk admin `admin`/`Cisc0123#`. This is
-  what the `splunk` MCP points at.
+  `198.18.128.51`, Splunk Enterprise 10.4.x, systemd-managed (`Splunkd.service`).
+  Web `:8000` (plain HTTP), mgmt `:8089`, HEC `:8088`. Splunk admin `admin` (pass in
+  `.env` **`SPLUNK_PASSWORD`**). This is what the `splunk` MCP points at. **Note:** the
+  box has been rebuilt (fresh 10.4.0; the historical add-on manifest in
+  `addons/README.md` is a *prior* state — confirm with `splunk_list_apps`) and **SSH
+  (22) is currently closed**, so add-on installs go through **Splunk Web (port 8000)**,
+  not `scp`/`ssh` (see "Install a Splunkbase add-on" below); the "Host-level tasks (SSH)"
+  section applies only when SSH is open.
 - **splunk1 - the quick one** (CML `splunk` Docker node): `198.18.128.50`, Splunk
   10.4.0, 16 GB but **1 usable CPU** (CML Docker nodes are CPU-capped to 1 core -
   the node def locks it; RAM overrides fine). Handy as a second target; not the
@@ -89,11 +93,36 @@ prefixed **`sim-`**. HEC needs a token (widen it to multiple indexes by POSTing
 Use this for demos and to smoke-test add-on field extractions; use real device
 forwarding for actual validation.
 
-**Install a Splunkbase add-on.** Download the `.tgz` (auth-gated on splunkbase.com)
-to the Splunk host (SSH as `cisco@198.18.128.51`, drop in `/tmp`), then
-`splunk_install_app('/tmp/<addon>.tgz')`, `splunk_enable_app(<name>)`, and restart
-Splunk if prompted. Then set the source's sourcetype to the one the add-on expects
-and use its dashboards (`splunk_list_dashboards`).
+**Install a Splunkbase add-on.** The pre-downloaded `.tgz`/`.tar.gz` packages live in
+`../Splunk_MCP/addons/` (gitignored; committed manifest). `splunk_install_app(source)`
+only takes a path **on the Splunk box** or a URL Splunk can fetch — but on the current
+`.51` box **SSH (22) is closed** *and* the lab→host tunnel is one-way (Splunk can't
+fetch a URL back to this host; `apps/local` also rejects a multipart body). So upload
+through **Splunk Web (port 8000, plain HTTP)**: GET `/en-US/account/login` (sets `cval`),
+POST it (`username`/`password`/`cval`; Splunk 10 returns `{"status":0}`), grab the
+`splunkweb_csrf_token_8000` cookie, then
+`curl -F appfile=@pkg.tgz -H "X-Splunk-Form-Key: <csrf>" …/en-US/manager/appinstall/_upload`
+(303 = OK) → restart via `POST /services/server/control/restart`. The `.env` var is
+**`SPLUNK_PASSWORD`**. Then set the source's sourcetype to the add-on's expected one and
+use its dashboards. `cisco-secure-firewall_102.tgz` is the **Splunk SOAR** connector, not
+an Enterprise TA — don't use it as a feeder.
+
+**Cisco Security Cloud app — the Secure Firewall dashboard.** `CiscoSecurityCloud` (4.0)
+is installed + enabled on `.51`; its `secure_firewall_dashboard` reads the app's own
+**`Cisco_Security.Secure_Firewall_Dataset`** data model (not CIM). Two feeds:
+- **Syslog (connection-only, quick):** dedicated UDP input **5514 → sourcetype
+  `cisco:ftd:syslog`, index `network`**; re-point the FTD's syslog server to it (FMC
+  platform settings); one search-time props fix — the child datasets need a `message_id`
+  field but syslog yields `rec_type`, so add
+  `EXTRACT-…=%FTD-\d+-(?P<message_id>\d{6})` for `cisco:ftd:{connection,intrusion,file,malware}`;
+  enable data-model **acceleration** on `Cisco_Security`.
+- **eStreamer (full fidelity — Connection+Intrusion+File+Malware):** the app's
+  **Add-Input UI** (Application Setup → Cisco Secure Firewall → E-Streamer tab): FMC host,
+  port **8302**, upload the pkcs12 (minted GUI-only in FMC Integrations → eStreamer →
+  Create Client for the Splunk IP), Import = All Firewall Event Data, Events = All, index
+  **`network`** (default `cisco_secure_fw` doesn't exist). The 4.0 REST handler rejects the
+  `password` arg, so the create must go through the UI, not a scripted POST. Data lands as
+  `cisco:sfw:estreamer`. **Full recipe: `Custom Designs/SD-Access ISE Integration/modules/splunk-security-cloud.md`.**
 
 ## Host-level tasks (SSH, not the API)
 

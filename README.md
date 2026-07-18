@@ -146,6 +146,12 @@ separate, independently usable MCP server for **Splunk Enterprise**.
   and Windows at it; the device agents configure forwarding, splunk-engineer owns
   the receiving side + dashboards. Prefer existing Splunkbase add-ons (Cisco
   Security Cloud, Cisco ISE, Microsoft Windows) and their prebuilt dashboards.
+- **Cisco Security Cloud → Secure Firewall dashboard (live).** The `CiscoSecurityCloud`
+  app is installed and its `secure_firewall_dashboard` is populated with **100% real FTD
+  data via eStreamer** (FMC:8302 + a GUI-minted pkcs12 client cert) — real
+  Connection/Intrusion/File/Malware, plus a syslog-only fallback (`cisco:ftd:*` on UDP
+  5514). eStreamer also closes the D13 firewall-event gap. Full recipe + the C6/C9 real-
+  threat triggers in [`Custom Designs/SD-Access ISE Integration/modules/splunk-security-cloud.md`](Custom%20Designs/SD-Access%20ISE%20Integration/modules/splunk-security-cloud.md).
 - **Runs as a CML node** — the stock `splunk` Docker node is quick but CML caps
   Docker nodes to **1 CPU** (RAM overrides fine); for real multi-core, install
   Splunk on an `ubuntu` KVM node (4 vCPU works).

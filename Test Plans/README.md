@@ -37,6 +37,7 @@ the report fills in.
 | [firewall-sdwan](Lab%20Designs/firewall-sdwan.md) | [Firewall SD-WAN](../Cisco%20Validated%20Designs/Firewall%20SD-WAN/) | 6-site VTI overlay, FMC-provisioned |
 | [rapid-threat-containment](Lab%20Designs/rapid-threat-containment.md) | [SD-Access ISE Integration](../Custom%20Designs/SD-Access%20ISE%20Integration/) (C2) | ISE 3.5 ANC quarantine → CoA bounces a live SDA fabric session |
 | [security-intelligence-blocking](Lab%20Designs/security-intelligence-blocking.md) | [SD-Access ISE Integration](../Custom%20Designs/SD-Access%20ISE%20Integration/) (C7) | FMC/FTD Security Intelligence pre-ACL block (Host object → SI blocklist) |
+| [secure-firewall-observability](Lab%20Designs/secure-firewall-observability.md) | [SD-Access ISE Integration](../Custom%20Designs/SD-Access%20ISE%20Integration/) (V6–V8, C6/C9/C12–C16) | Cisco Security Cloud dashboard (syslog + eStreamer) + FTD deep inspection (IPS/malware/URL/AVC/EVE/geo/decrypt) |
 
 ## Test levels
 
@@ -56,7 +57,7 @@ exercised manual-live via the specialist agents); ISE/Windows/CML add integratio
 ## Conventions
 
 - **Test IDs:** `<PREFIX>-NNN`, unique within a plan. Prefixes:
-  servers `CML- ISE- FMC- WIN- SPL- WLC-`; designs `NAC- WLNAC- SGT- SDWAN- RTC- SI-`.
+  servers `CML- ISE- FMC- WIN- SPL- WLC-`; designs `NAC- WLNAC- SGT- SDWAN- RTC- SI- SFW-`.
 - **One case per capability/tool-group**, not per tool — the Steps name the tools it
   exercises. (ISE's 184 tools → ~30 capability cases.)
 - **Test-case columns:** `ID · Objective · Steps · Expected result / pass criteria · Coverage`.

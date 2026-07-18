@@ -71,8 +71,37 @@ HOST1 → SVI up → HOST1→ISE 0% loss. **pyats gotcha:** after a CML node rel
 session wedges at "Press RETURN to get started!" and never reaches the EXEC prompt — verify from a
 *neighbor* node (HOST1) or restart the CML MCP to refresh the console cache.
 
-## Alt path (richer, deferred) — eStreamer
+## eStreamer — real FMC data end-to-end (DONE 2026-07-18)
 `CiscoSecurityCloud`'s bundled `sbg_fw_estreamer_input` pulls connection **+ intrusion + file +
-malware** events straight from FMC (TCP **8302** + a pkcs12 client cert minted in **FMC → System →
-Integration → eStreamer**, GUI-only). That also closes the **D13** firewall-event gap syslog
-doesn't carry. Syslog (above) is enough for the connection dashboard.
+malware** events straight from FMC over TCP **8302** — genuine data that also closes the **D13**
+firewall-event gap syslog doesn't carry. Recipe:
+
+1. **FMC (GUI, `admin1`):** Integrations → eStreamer → tick the event types (all 9: Discovery,
+   Correlation, Impact-Flag, Intrusion, Intrusion-Packet, User-Activity, Malware, File, Connection)
+   → **Save** → **Create Client**, Hostname = the Splunk box IP `198.18.128.51` + a pkcs12 password
+   → download the **pkcs12** (cert CN = the client IP; enabling eStreamer opens FMC:8302).
+2. **Splunk input** — the cert isn't cleanly scriptable (the 4.0 REST handler
+   `CiscoSecurityCloud_sbg_fw_estreamer_input` accepts `pkcs_certificate` but **rejects the
+   `password` arg**), so use the app's **Add-Input UI** (Splunk Web → Application Setup → *Cisco
+   Secure Firewall* → **E-Streamer** tab): Input Name, FMC Host `198.18.128.80`, Port 8302, upload
+   the pkcs12, Password, Import Time Range = **All Firewall Event Data**, Event Types = **All**,
+   Index = **network** (the app default `cisco_secure_fw` doesn't exist → save fails otherwise).
+   Save validates the FMC connection with the cert. Data lands as **`cisco:sfw:estreamer`**
+   (`EventType=ConnectionEvent/IntrusionEvent/FileEvent/…`) → the model's eStreamer child datasets
+   → every panel. *(For a browser upload, `file_upload` only accepts session-shared files, so drop
+   the pkcs12 into the chat or let the user pick it from the native dialog.)*
+3. **Generate real threats** (fabric traffic must flow — see the NAC fix above):
+   - **C6 intrusion:** from HOST1 `printf 'C6TRIGGER…' | nc -w1 198.18.134.35 443` — use raw **:443**
+     so the Snort `content:"C6TRIGGER"` rule matches (HTTP normalization on :80/:8000 hides it) →
+     real `IntrusionEvent`, signature `LOCAL C6 RTC test trigger` → IPS-by-Signature panel.
+   - **C9 malware:** EICAR *server* placement is the blocker — DC01 (`.130`) is unreachable from
+     CAMPUS, `SHARED-SVC` is a non-root fabric-VN alpine with no `httpd` applet. **What works: HOST1
+     UPLOADS EICAR** (file policy is `direction:ANY`): `wget --post-data='<68-byte EICAR>'
+     http://198.18.128.51:8000/en-US/eicar.com` → the FTD reconstructs+scans the POST body → real
+     `FileEvent` (`file_name=eicar.com, SHA_Disposition=Malware, ThreatName=EICAR`) → File **and**
+     Malware panels (SHA_Disposition=Malware satisfies the Malware_Events constraint).
+
+**Verified 2026-07-18:** Connection/Intrusion/File/Malware all streaming via eStreamer; data model
+datasets all populated; the Secure Firewall dashboard is **100% real** — only *Indications of
+Compromise* stays empty (impact **Level 5 = not determined**; no IOC without host-vuln profiling).
+Syslog (5514, above) remains fine for the connection-only board; eStreamer is the full-fidelity path.

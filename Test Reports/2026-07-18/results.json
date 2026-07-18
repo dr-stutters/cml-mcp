@@ -1,0 +1,79 @@
+{
+  "report": "Secure Firewall depth + Cisco Security Cloud observability (V6-V8, C6/C9, C12-C16)",
+  "run_date": "2026-07-18",
+  "mode": "manual-live + offline automated gate",
+  "plan": "Test Plans/Lab Designs/secure-firewall-observability.md",
+  "plan_section": "SFW-001..013",
+  "verdict": "PASS",
+  "verdict_note": "All 13 cases PASS. Read-only run (FMC/Splunk GET + SPL search only). Two non-blocking observations: FTDv health yellow (cosmetic Cloud-Connector warning, air-gapped) and a bug in run_report.py's smoke-timeout handler (bytes+str) that aborts the --smoke gate; the offline gate (ruff+pytest) is clean and live smoke was evidenced directly via the MCP read tools.",
+  "lab": {"name": "SDA-Fabric", "id": "77dd2fde-1fda-4cc9-9b29-48ff98bd1395", "state": "STARTED/converged"},
+  "design": "Custom Designs/SD-Access ISE Integration",
+  "modules": ["modules/splunk-security-cloud.md", "modules/fmc-firewall-depth.md"],
+  "versions": {
+    "fmc": "10.0.1 (build 1)",
+    "ftd": "10.0.0 (Snort 3.9.3.1-61)",
+    "splunk": "10.4.0",
+    "cisco_security_cloud_app": "4.0.0",
+    "ise": "3.5.0.527",
+    "fabric_edge": "cat9000v IOS-XE 17.18",
+    "vdb": "build 433 (2026-07-08)",
+    "lsp": "lsp-rel-20260715-1654"
+  },
+  "targets": {
+    "FMCv": {"address": "198.18.128.80", "role": "Mgmt Center — SDA-ACP + SDA-Decrypt + eStreamer source (TCP 8302)", "reachable": true},
+    "FTDv": {"mgmt": "198.18.128.81", "data_outside": "198.18.128.82", "device_id": "37ffcab8-8126-11f1-a47b-d7a4b50be775", "role": "Secure Firewall — deep inspection (IPS/malware/URL/AVC/EVE/geo/decrypt)", "reachable": true, "deploymentStatus": "DEPLOYED", "managementState": "MANAGED", "isConnected": true, "health": "yellow (cosmetic: Cloud Connector — Check Cloud Eventing Subscription)"},
+    "SPLUNK": {"address": "198.18.128.51", "role": "SIEM — Cisco Security Cloud app + Secure Firewall dashboard", "reachable": true, "version": "10.4.0"},
+    "HOST1": {"address": "172.16.10.50", "user": "alice", "role": "CAMPUS fabric endpoint (traffic source; no Internet)", "reachable": true, "note": "pyats console 1-command lag this session -> FMC/Splunk-side evidence preferred"},
+    "EDGE1": {"role": "cat9000v fabric edge; edge-auth wedge cleared by a reload", "reachable": true},
+    "ISE35": {"address": "198.18.134.35", "role": "decrypt-bypass dst (net-ise)", "reachable": true}
+  },
+  "acp": {"name": "SDA-ACP", "id": "5254002E-0748-0ed3-0000-004294968720"},
+  "decrypt_policy": {"name": "SDA-Decrypt", "id": "b10b55fe-81ed-11f1-ab09-ebb47983003b"},
+  "cases": [
+    {"id": "SFW-001", "roadmap": "V6", "objective": "Cisco Security Cloud app installed/enabled; Cisco_Security data model + secure_firewall_dashboard view present", "result": "PASS",
+     "evidence": {"app": "CiscoSecurityCloud version 4.0.0, disabled=false, visible=true, label 'Cisco Security Cloud', sharing global", "datamodel": "GET data/models/Cisco_Security -> entry name 'Cisco_Security', modelName 'Cisco_Security', Secure_Firewall_Dataset with child datasets Connection_Events/Intrusion_Events/File_Events/Malware_Events", "view": "GET data/ui/views/secure_firewall_dashboard -> label 'Secure Firewall Dashboard', isDashboard=true, disabled=false; panels bind tstats over Cisco_Security.Secure_Firewall_Dataset.*"}},
+    {"id": "SFW-002", "roadmap": "V7", "objective": "Secure Firewall dashboard fed by dedicated FTD syslog input (UDP 5514)", "result": "PASS",
+     "evidence": {"input": "udp/5514 disabled=false, index=network, sourcetype=cisco:ftd:syslog, connection_host=ip (udp/514 stays cisco:ios for the fabric switches)", "fmc_syslog_server": "FTD platform-settings syslog server on port 5514 (re-pointed from 514), src FTD outside .82", "events": "index=network sourcetype=cisco:ftd:* -> cisco:ftd:syslog 508 (last 2026-07-18 02:04:40), cisco:ftd:connection 395, cisco:ftd:connection:security 60, cisco:ftd:file 8, cisco:ftd:intrusion 19, cisco:ftd:malware 6 (index-time sub-classification by FTD msg-id works)"}},
+    {"id": "SFW-003", "roadmap": "NAC fix", "objective": "EDGE1 reload cleared the wedged Closed-Auth edge-auth; HOST1 services restored (live FTD traffic logged)", "result": "PASS",
+     "evidence": {"live_ftd_from_data_ip": "index=network host=198.18.128.82 sourcetype=cisco:ftd:* -> cisco:ftd:connection 217 (last 2026-07-18 01:41:07), cisco:ftd:connection:security 60, cisco:ftd:intrusion 8, cisco:ftd:syslog 508 (last 02:04:40 ~ run time)", "interpretation": "recent live connection/syslog from the FTD data interface proves the SDA east-west path is up (EDGE1 Vlan1021 SVI up, HOST1 MAB re-authorized) and HOST1 traffic transits + is logged by the FTD"}},
+    {"id": "SFW-004", "roadmap": "V8", "objective": "eStreamer input enabled; real FMC events flowing; Cisco_Security child datasets populated", "result": "PASS",
+     "evidence": {"input": "CiscoSecurityCloud_sbg_fw_estreamer_input 'SDA_FMC_eStreamer' disabled=false, fmc_host=198.18.128.80, fmc_port=8302, sourcetype=cisco:sfw:estreamer, index=network, estreamer_import_time_range=all_firewall_event_data, event_types=*,connection_log,file_log,intrusion_log,intrusion_packet_log", "events_by_type": "index=network sourcetype=cisco:sfw:estreamer -> ConnectionEvent 211, FileEvent 11, IntrusionEvent 8, IntrusionPacket 8 (last 2026-07-18 01:41:07)", "tstats_datasets": "Secure_Firewall_Dataset 658; Connection_Events 606; Intrusion_Events 27; File_Events 25; Malware_Events 17 (all child datasets count>0)"}},
+    {"id": "SFW-005", "roadmap": "C6", "objective": "Real IPS intrusion event -> signature 'LOCAL C6 RTC test trigger'", "result": "PASS",
+     "evidence": {"search": "index=network sourcetype=cisco:sfw:estreamer EventType=IntrusionEvent by signature -> 'LOCAL C6 RTC test trigger' count 6 (last 2026-07-18 01:01:27); bonus 'POLICY-OTHER eicar test string download attempt' count 2"}},
+    {"id": "SFW-006", "roadmap": "C9", "objective": "Real malware file event -> eicar.com, SHA_Disposition=Malware, ThreatName=EICAR", "result": "PASS",
+     "evidence": {"search": "index=network sourcetype=cisco:sfw:estreamer EventType=FileEvent by FileName -> eicar.com count 3, SHA_Disposition=Malware, ThreatName=EICAR (last 2026-07-18 00:59:53); plus mal1-8.com EICAR variants"}},
+    {"id": "SFW-007", "roadmap": "C12", "objective": "URL-category block rule present + deployed", "result": "PASS",
+     "evidence": {"rule": "C12-Block-Malware-URL @ ruleIndex 6, action BLOCK, urls.urlCategoriesWithReputation = 'Malware Sites' (abba9b63-bb10-4729-b901-2e2aa0f01001), src net-campus10, enabled=true", "note": "config-present + deployed; live external hit deferred (HOST1 has no Internet)"}},
+    {"id": "SFW-008", "roadmap": "C13", "objective": "Application/AVC block rule present + deployed", "result": "PASS",
+     "evidence": {"rule": "C13-Block-HTTP-App @ ruleIndex 2, action BLOCK, application HTTP (id 676), src net-campus10 -> dst host-splunk, enableSyslog=true, enabled=true", "prior_proof": "HOST1 wget http://198.18.128.51:8000/ times out (blocked by app-ID, not port)", "side_effect": "this rule blocks CAMPUS->Splunk HTTP on HOST1's upload path — known/expected, not a defect (eStreamer pulls from FMC, unaffected)"}},
+    {"id": "SFW-009", "roadmap": "C14", "objective": "Encrypted Visibility Engine enabled (MONITOR_TRAFFIC)", "result": "PASS",
+     "evidence": {"eve": "GET SDA-ACP/evesettings/5254002E-0748-0ed3-0000-004294968730 -> enabled=true, mode=MONITOR_TRAFFIC, inheritFromParent=false"}},
+    {"id": "SFW-010", "roadmap": "C15", "objective": "Geolocation/country block rule present + deployed", "result": "PASS",
+     "evidence": {"rule": "C15-Block-Country-China @ ruleIndex 5, action BLOCK, destinationNetworks Country China (id 156), src net-campus10, enabled=true", "note": "config-present + deployed; live external hit deferred (no Internet)"}},
+    {"id": "SFW-011", "roadmap": "C16", "objective": "Selective TLS-decryption bypass above the resign rule", "result": "PASS",
+     "evidence": {"rule": "C16-DND-ISE @ ruleIndex 1, ruleAction DO_NOT_DECRYPT, src net-campus10 -> dst net-ise, logging logEnd+sendEvents, enabled=true", "sits_above": "Decrypt-CAMPUS-443 @ ruleIndex 2 (DECRYPT_RESIGN, cert SDA-Decrypt-Resign-CA, dst tcp/443)", "prior_proof": "openssl s_client HOST1->198.18.134.35:443 shows issuer CN=Mitchcloud-Lab-Root-CA (ISE real cert = bypassed) vs CN=SDA-Decrypt-Resign-CA for other 443"}},
+    {"id": "SFW-012", "roadmap": "deploy hygiene", "objective": "Nothing pending; FTD managed + deployed", "result": "PASS",
+     "evidence": {"deployable_devices": "[] (empty) — nothing pending", "ftd": "deploymentStatus=DEPLOYED, managementState=MANAGED, isConnected=true, accessPolicy=SDA-ACP, licenses ESSENTIALS/MALWARE_DEFENSE/IPS/URL, snortEngine SNORT3"}},
+    {"id": "SFW-013", "roadmap": "gate", "objective": "Offline automated gate (ruff + pytest) across the six MCP repos", "result": "PASS",
+     "evidence": {"ruff": "clean on all 6 repos", "unit": "134 passed / 0 failed (cml-mcp 33, ise-mcp 49, firepower-mcp 6, windows-mcp 15, splunk-mcp 21, wlc-mcp 10)", "note": "the --smoke gate aborted on a run_report.py handler bug (TimeoutExpired bytes+str) -> O2; live smoke evidenced directly via the MCP read tools instead"}}
+  ],
+  "automated_gate": {
+    "generated": "2026-07-18T02:08:11+00:00",
+    "levels": {"offline": true, "smoke": false, "write": false},
+    "repos": [
+      {"name": "cml-mcp", "plan": "CML", "ruff": "ok", "unit": "33p/0f"},
+      {"name": "ise-mcp", "plan": "ISE", "ruff": "ok", "unit": "49p/0f"},
+      {"name": "firepower-mcp", "plan": "FMC", "ruff": "ok", "unit": "6p/0f"},
+      {"name": "windows-mcp", "plan": "WIN", "ruff": "ok", "unit": "15p/0f"},
+      {"name": "splunk-mcp", "plan": "SPL", "ruff": "ok", "unit": "21p/0f"},
+      {"name": "wlc-mcp", "plan": "WLC", "ruff": "ok", "unit": "10p/0f"}
+    ],
+    "total_unit": "134 passed / 0 failed"
+  },
+  "summary": {"pass": 13, "fail": 0, "skip": 0, "unreachable": 0, "partial": 0},
+  "observations": [
+    {"id": "O1", "severity": "info", "text": "FTDv healthStatus=yellow — single module warning 'Cloud Connector -> Check Cloud Eventing Subscription'. Expected in an air-gapped lab (no SSE/cloud eventing). Device is DEPLOYED/MANAGED/connected with nothing pending; not a defect in the systems under test. (fmc_list_devices momentarily showed red; the authoritative device record + health roll-up report yellow.)"},
+    {"id": "O2", "severity": "low", "text": "Test Reports/run_report.py aborts the --smoke gate: its TimeoutExpired handler does (e.stdout or '') + (e.stderr or '') where those are bytes -> TypeError bytes+str, crashing the whole run when any live smoke exceeds the 90s timeout. Offline gate is unaffected. Remediation brief -> harness owner (main session)."}
+  ],
+  "reversibility": "read-only run — every FMC and Splunk call was a GET or SPL search; no built configuration modified, no round-trips required."
+}

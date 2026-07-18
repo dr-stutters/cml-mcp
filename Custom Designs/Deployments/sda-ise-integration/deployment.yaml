@@ -1,0 +1,96 @@
+# Deployment: SD-Access ISE Integration (the full stack)
+# An ordered composition of atoms from ../../Runbooks/. Build in phase order; within a phase,
+# atoms may run in parallel ONLY where their node-sets are disjoint. See ../../REBUILD.md.
+
+name: sda-ise-integration
+addressing: addressing.yaml          # gitignored; copy from addressing.example.yaml
+topology: topology.yaml              # build_lab_from_spec source (added during rebuild)
+
+# ---- human touchpoints (surfaced up front — atoms where human: != none) --------------------
+human_touchpoints:
+  - atom: catc/catc-ise-integration        # gui: approve the pxGrid client in the ISE GUI
+  - atom: firewall/ftd-estreamer-client     # gui: FMC Create Client + download the pkcs12
+  - atom: observability/syslog-sources      # gui: ISE remote-logging-target (no hyphens)
+  - atom: observability/splunk-cim          # external-download: CIM 8.5.0 from Splunkbase
+  - atom: observability/splunk-ise-addon    # external-download: ISE add-on 5.0.0 from Splunkbase
+  - atom: observability/splunk-security-cloud  # gui + external-download + file-transfer (pkcs12)
+
+# ---- build order (phased) ------------------------------------------------------------------
+phases:
+  - name: foundation
+    atoms:
+      - foundation/cml-lab-base
+      - foundation/apply-addressing
+      - foundation/windows-dc-promote
+      - foundation/windows-dns
+      - foundation/windows-adcs-ca
+      - foundation/ad-users-groups
+
+  - name: identity-base
+    atoms:
+      - identity/ise-deploy
+      - identity/ise-certs
+      - identity/ise-ad-join
+      - identity/ise-idstores-protocols
+
+  - name: fabric
+    atoms:
+      - fabric/sda-underlay
+      - fabric/sda-lisp-overlay
+      - fabric/sda-anycast-gw
+      - fabric/sda-border-handoff
+      - fabric/fusion-vrf-leak
+
+  - name: catalyst-center
+    atoms:
+      - catc/catc-reachability
+      - catc/catc-discovery
+      - catc/catc-site-hierarchy
+      - catc/catc-network-settings
+      - catc/catc-ise-integration
+      - catc/catc-fabric-provision
+
+  - name: access-nac
+    atoms:
+      - identity/ise-nad-onboard
+      - access/switch-radius-dot1x
+      - identity/ise-policy-sets
+      - identity/ise-authz-profiles-dacls
+      - identity/ise-trustsec-sgt
+      - identity/ise-trustsec-sgacl
+      - identity/ise-anc
+      - fabric/sda-host-onboard
+      - access/endpoint-hosts
+
+  - name: firewall
+    atoms:
+      - firewall/fmc-base
+      - firewall/ftd-register
+      - firewall/ftd-interfaces-zones
+      - firewall/ftd-acp-base
+      - firewall/ftd-identity-realm
+      - firewall/ftd-ips
+      - firewall/ftd-malware-file
+      - firewall/ftd-decryption
+      - firewall/ftd-url-geo-app
+      - firewall/ftd-eve
+      - firewall/ftd-estreamer-client
+
+  - name: observability
+    atoms:
+      - observability/splunk-base
+      - observability/splunk-syslog-inputs
+      - observability/syslog-sources
+      - observability/splunk-hec
+      - observability/healthcheck-cron
+      - observability/splunk-cim
+      - observability/splunk-ise-addon
+      - observability/splunk-security-cloud
+      - observability/splunk-dashboards
+
+  - name: acceptance
+    atoms:
+      - validate/deployment-acceptance
+
+# wireless/ atoms (wlc-base, wlc-radius-ise, wlc-wlan-dot1x, hostapd-dot1x) are optional —
+# add a `wireless` phase after access-nac when that stack is in scope.

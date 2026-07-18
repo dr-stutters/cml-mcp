@@ -1,0 +1,54 @@
+# addressing.example.yaml — the per-deployment LOGICAL PLAN.
+#
+# Copy to `addressing.yaml` (GITIGNORED) and fill with this rebuild's real values.
+# This file holds the design plan ONLY: IPs, hostnames, VLAN/VNI/SGT numbers, cert names,
+# and credential *references* (keys). NEVER put a password here — secrets live solely in the
+# master ../.env (also gitignored). `foundation/apply-addressing` reads this file and writes
+# the mgmt IPs/hostnames into ../.env so every companion MCP can reach its box.
+
+deployment: sda-ise-integration
+
+subnets:
+  mgmt:       198.18.0.0/24        # replace with the rebuild's real mgmt range
+  campus_vn:  172.16.10.0/24       # fabric CAMPUS overlay
+  shared_vn:  172.16.20.0/24       # fabric shared-services overlay
+  underlay:   10.0.0.0/24          # fabric p2p + loopbacks
+
+# per-node: mgmt IP + hostname (+ fqdn where a resolvable name is needed)
+nodes:
+  ise:     { mgmt_ip: 198.18.0.35, hostname: ise01,   fqdn: ise01.example.lab }
+  fmc:     { mgmt_ip: 198.18.0.80, hostname: fmcv }
+  ftd:     { mgmt_ip: 198.18.0.81, hostname: ftdv }
+  splunk:  { mgmt_ip: 198.18.0.51, hostname: splunk01 }
+  catc:    { mgmt_ip: 198.18.0.61, hostname: catc }
+  dc:      { mgmt_ip: 198.18.0.11, hostname: dc01,    fqdn: dc01.example.lab }
+  border:  { mgmt_ip: 198.18.0.70, hostname: border-cp }
+  edge1:   { mgmt_ip: 198.18.0.71, hostname: edge1 }
+  fusion:  { mgmt_ip: 198.18.0.72, hostname: fusion }
+  host1:   { fabric_ip: 172.16.10.50, hostname: host1 }
+
+ad:
+  domain:     example.lab
+  join_user:  administrator
+  users:      [alice, bob, carol]
+  groups:     [Employees]
+
+ca:
+  name: Example-Lab-Root-CA          # AD CS root; feeds ise-certs + ftd-decryption trust
+
+trustsec:
+  sgts: { Employees: 4, Quarantined_Systems: 255, Shared-Services: 10 }
+
+fabric:
+  campus:  { vlan: 1021, vni: 8188, anycast_gw: 172.16.10.1 }
+  shared:  { vlan: 1022, vni: 8189, anycast_gw: 172.16.20.1 }
+  roles:   { control_plane: border, border: border, edge: [edge1] }
+
+# credential REFERENCES — the KEY that resolves from ../.env, never the secret itself
+credentials:
+  ise_admin:    ISE_PASSWORD
+  fmc_admin:    FMC_PASSWORD
+  splunk_admin: SPLUNK_PASSWORD
+  catc_admin:   CATC_PASSWORD
+  winrm:        WINRM_PASSWORD
+  radius_secret: RADIUS_SECRET

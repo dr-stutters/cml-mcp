@@ -44,6 +44,20 @@ REPOS = [
 BASE = Path(__file__).resolve().parents[2]  # .../Test Reports -> CML_MCP -> MCP
 
 
+def _as_text(value: object) -> str:
+    """Coerce subprocess output (None | str | bytes) to str.
+
+    On TimeoutExpired the stdout/stderr attributes can come back as bytes even
+    under text=True (the timeout fires before decoding), so mixing them with a
+    str default would raise TypeError on concatenation — normalise each first.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return str(value)
+
+
 def _run(cmd: list[str], cwd: Path, timeout: int) -> tuple[int | None, str]:
     """Run a command, return (returncode|None-on-timeout, combined output)."""
     try:
@@ -52,8 +66,7 @@ def _run(cmd: list[str], cwd: Path, timeout: int) -> tuple[int | None, str]:
         )
         return p.returncode, (p.stdout + p.stderr)
     except subprocess.TimeoutExpired as e:
-        out = (e.stdout or "") + (e.stderr or "")
-        return None, out if isinstance(out, str) else out.decode(errors="replace")
+        return None, _as_text(e.stdout) + _as_text(e.stderr)
 
 
 def _pytest_counts(text: str) -> dict:

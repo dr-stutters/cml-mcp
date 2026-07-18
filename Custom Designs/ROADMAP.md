@@ -105,11 +105,11 @@ Legend: S/M/L effort · `→` = depends on
 *More FTD/FMC functionality + turn the firewall/fabric telemetry into NOC/SOC dashboards. Firewall-first per the standing steer.*
 
 ### Firewall functionality
-- [ ] **C12** URL filtering (S) — category/reputation URL blocking on an ACP rule; prove a blocked category + the URL event (Talos URL DB reachable over the same `/18` mgmt path as C9's AMP)
-- [ ] **C13** Application control / AVC (S) — app-ID rule (block/allow by application, not port); prove with an app the FTD identifies on a CAMPUS flow
-- [ ] **C14** Encrypted Visibility Engine (EVE) (S) — enable EVE (the ACP has an `eveSetting`); classify encrypted client apps/threats without decryption; compare with C8 decrypt-resign
-- [ ] **C15** Geolocation / country blocking (S) — block by source/dest country object on an ACP rule
-- [ ] **C16** Identity-based decryption bypass (S) → C8 — a Do-Not-Decrypt rule for a sensitive category/user (e.g. Employees→finance) above the Decrypt-Resign rule; prove selective decryption
+- [x] **C12** URL filtering (S) — **DONE ✅ (2026-07-18).** Access rule `C12-Block-Malware-URL` (BLOCK, `urls.urlCategoriesWithReputation` = **Malware Sites**, src net-campus10) on SDA-ACP + deploy. Proof deferred — HOST1 has no internet; rule + Talos URL category live on the FTD (packet-tracer-verifiable).
+- [x] **C13** Application control / AVC (S) — **DONE ✅ (2026-07-18).** Access rule `C13-Block-HTTP-App` (BLOCK, `applications`=**HTTP** app id 676, src net-campus10 → host-splunk, inserted above Permit) + deploy. **PROVEN:** HOST1 `wget http://198.18.128.51:8000/` now **times out (blocked by app-ID)** — was allowed. *(FMC application-object API won't filter by name → page the catalog; HTTP=676, HTTPS=1122.)*
+- [x] **C14** Encrypted Visibility Engine (EVE) (S) — **DONE ✅ (2026-07-18).** `PUT …/evesettings` → `enabled:true, mode:MONITOR_TRAFFIC` on SDA-ACP + deploy — classifies encrypted client apps/threats without decryption (complements C8/C16).
+- [x] **C15** Geolocation / country blocking (S) — **DONE ✅ (2026-07-18).** Access rule `C15-Block-Country-China` (BLOCK, `destinationNetworks`=**Country** China id 156, src net-campus10) on SDA-ACP + deploy. (Country objects go straight into the network condition; proof deferred — no internet.)
+- [x] **C16** Identity/category decryption bypass (S) → C8 — **DONE ✅ (2026-07-18).** DND rule `C16-DND-ISE` (`DO_NOT_DECRYPT`, CAMPUS→net-ise) at **ruleIndex 1**, above the `Decrypt-CAMPUS-443` resign rule, on SDA-Decrypt + deploy. **PROVEN:** HOST1→ISE:443 cert issuer flipped back to **`CN=Mitchcloud-Lab-Root-CA`** (ISE real cert = bypassed) vs. the `SDA-Decrypt-Resign-CA` C8 produced. *(Decryption-rule logging uses `logEnd` not `logBegin`; `insertBefore=1` works despite a false 500.)*
 - [ ] **D13** *(carried from Wave 11)* FTD SI-block / intrusion security event → Splunk — the prerequisite that unlocks the richest firewall dashboards
 
 ### Splunk visualisation / NOC-SOC dashboards

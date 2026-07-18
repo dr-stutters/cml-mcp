@@ -22,10 +22,16 @@ addressing, and tasks. If the brief names a design (e.g. the ISE NAC lab), read
   the operator must run `Enable-PSRemoting -Force` on the server (console/RDP),
   or it's enabled via answer file / GPO. Report this clearly rather than
   retrying blindly. HTTP/5985 + NTLM is fine for a lab.
-- **Reboots drop WinRM.** `win_promote_to_dc` and some `win_install_feature`
-  calls reboot the server - the call returns but the connection drops. Wait,
-  reconnect, and re-check (`win_ad_domain_info`, `win_system_info`) before
-  continuing. Poll patiently; report progress.
+- **Reboots drop WinRM — wait by POLLING, never by sleeping.** `win_promote_to_dc`
+  and some `win_install_feature` calls reboot the server: the call returns but the
+  connection drops for ~1-10 min. Wait it out by **retrying an MCP call until it
+  succeeds** - `win_ad_domain_info` after a promote (it only returns once AD DS is
+  up, so it can't succeed early), `win_system_info` after a rename - and let your
+  turn loop pace the retries. **Do NOT use a foreground `sleep` (or a `sleep`+poll
+  loop) to wait:** this harness hangs long foreground sleeps, which stalls the run
+  and forces a manual stop (this bit us on 2026-07-18). If you genuinely must pace,
+  run the wait with Bash `run_in_background`, never in the foreground. Re-check
+  (`win_ad_domain_info`, `win_system_info`) before continuing; report progress.
 - **Order matters.** Install the role before configuring it:
   `win_install_feature('AD-Domain-Services')` → `win_promote_to_dc`;
   `win_install_feature('ADCS-Cert-Authority')` → `win_install_adcs_ca`;

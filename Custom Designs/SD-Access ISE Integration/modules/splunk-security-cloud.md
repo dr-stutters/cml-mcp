@@ -105,3 +105,36 @@ firewall-event gap syslog doesn't carry. Recipe:
 datasets all populated; the Secure Firewall dashboard is **100% real** — only *Indications of
 Compromise* stays empty (impact **Level 5 = not determined**; no IOC without host-vuln profiling).
 Syslog (5514, above) remains fine for the connection-only board; eStreamer is the full-fidelity path.
+
+## V2 — Threat / RTC dashboard (`sda_threat_rtc`, DONE 2026-07-18)
+A custom Simple-XML view (search app, `theme="dark"`, `tp` time token) that does what the vendor
+boards don't: **correlate the FTD threat with the ISE containment** across two indexes. Built with
+`splunk_create_dashboard`; complements `sda_firewall_noc`/`sda_soc_noc_overview` (those cover the
+syslog connection/allow-block/TLS/SGT story) — this one is threat + Rapid Threat Containment.
+
+Key SPL (all validated against live data — 8 intrusion / 11 malware / 9 ANC CoA):
+- **KPIs:** intrusion `index=network sourcetype=cisco:sfw:estreamer EventType=IntrusionEvent | stats count`;
+  malware `… EventType=FileEvent SHA_Disposition=Malware | stats count`; security-blocks
+  `index=network sourcetype=cisco:ftd:connection:security "AccessControlRuleAction: Block" | stats count`;
+  RTC `index=ise "CoASourceComponent=ANC" | stats count`.
+- **Cross-index unified timeline** (the money panel): `(index=network sourcetype=cisco:sfw:estreamer
+  (EventType=IntrusionEvent OR (EventType=FileEvent SHA_Disposition=Malware))) OR (index=ise
+  "CoASourceComponent=ANC") | eval evt=case(EventType=="IntrusionEvent","Intrusion drop (FTD)",
+  EventType=="FileEvent","Malware block (FTD)", match(_raw,"CoASourceComponent=ANC"),"ANC quarantine
+  CoA (ISE)", true(),"other") | timechart span=15m count by evt` — one search spans both indexes
+  because `EventType` only exists on the JSON eStreamer events; ISE syslog falls to the `match(_raw…)` arm.
+- **RTC timeline table** (ISE): `index=ise ("CoASourceComponent=ANC" OR "ANCPolicy=Quarantine" OR
+  "AuthorizationPolicyMatchedRule=ANC_Quarantine") | … rex Calling-Station-ID / NetworkDeviceName /
+  User-Name / CoAReason | eval stage=case(match(_raw,"5205 NOTICE"),"1. CoA-Disconnect issued (OK)",
+  match(_raw,"5417 NOTICE"),"2. CoA-Disconnect FAILED", match(_raw,"ANCPolicy=Quarantine"),"3.
+  Quarantine re-auth (SGT 255)", …)` → shows the ANC CoA-Disconnect on `EDGE1.lab.local` then the
+  quarantine re-auth to SGT 255.
+
+**Gotchas:** eStreamer events are JSON → fields (`InitiatorIP`, `IntrusionRuleMessage`, `ThreatName`,
+`SHA_Disposition`, `FileAction`, `Impact`, `UserName`) auto-extract, but the ConnectionEvent has **no**
+AC-action/SI field, so there's no distinct **C7/SI** panel (matches the D13 gap) — "blocks" come from
+intrusion Drop/Block + malware Block + `cisco:ftd:connection:security`. ISE CoA events are keyed by
+**MAC** (`Calling-Station-ID`), not username (username only appears on the re-auth), so the table
+coalesces `who = user | mac`. Screenshot via headless playwright: log in at `:8000/en-US/account/login`,
+`goto` the view with **`wait_until="domcontentloaded"`** (dashboards never reach `networkidle`) + a
+~38 s render wait; widen with `?form.tp.earliest=-2d%40d` so the 07-17 ISE CoAs and 07-18 threats co-show.

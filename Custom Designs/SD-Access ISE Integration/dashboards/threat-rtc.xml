@@ -1,0 +1,121 @@
+<form version="1.1" theme="dark">
+  <label>SDA Threat &amp; Rapid Threat Containment (RTC)</label>
+  <description>Fabric FTDv threat detection (eStreamer, index=network) correlated with Cisco ISE Rapid Threat Containment — ANC quarantine → CoA (index=ise). C6 intrusion drops, C9 malware blocks, security-event blocks, and the automated quarantine timeline. SD-Access ISE Integration lab.</description>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="tp">
+      <label>Time range</label>
+      <default><earliest>-7d@d</earliest><latest>now</latest></default>
+    </input>
+  </fieldset>
+
+  <row>
+    <panel>
+      <title>Intrusion events (C6)</title>
+      <single>
+        <search><query><![CDATA[index=network sourcetype=cisco:sfw:estreamer EventType=IntrusionEvent | stats count]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="colorBy">value</option>
+        <option name="rangeColors">["0xf58f39","0xf58f39"]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Malware blocks (C9)</title>
+      <single>
+        <search><query><![CDATA[index=network sourcetype=cisco:sfw:estreamer EventType=FileEvent SHA_Disposition=Malware | stats count]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="colorBy">value</option>
+        <option name="rangeColors">["0xdc4e41","0xdc4e41"]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Security-event blocks (FTD)</title>
+      <single>
+        <search><query><![CDATA[index=network sourcetype=cisco:ftd:connection:security "AccessControlRuleAction: Block" | stats count]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="rangeColors">["0xf58f39","0xf58f39"]</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <title>ANC quarantine CoAs (RTC)</title>
+      <single>
+        <search><query><![CDATA[index=ise "CoASourceComponent=ANC" | stats count]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="rangeColors">["0x006d9c","0x006d9c"]</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Threat detection &amp; automated containment — unified timeline (FTD + ISE)</title>
+      <chart>
+        <search><query><![CDATA[(index=network sourcetype=cisco:sfw:estreamer (EventType=IntrusionEvent OR (EventType=FileEvent SHA_Disposition=Malware))) OR (index=ise "CoASourceComponent=ANC") | eval evt=case(EventType=="IntrusionEvent","Intrusion drop (FTD)", EventType=="FileEvent","Malware block (FTD)", match(_raw,"CoASourceComponent=ANC"),"ANC quarantine CoA (ISE)", true(),"other") | timechart span=15m count by evt]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.fieldColors">{"Intrusion drop (FTD)":0xf58f39,"Malware block (FTD)":0xdc4e41,"ANC quarantine CoA (ISE)":0x006d9c}</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Threats by type</title>
+      <chart>
+        <search><query><![CDATA[index=network sourcetype=cisco:sfw:estreamer (EventType=IntrusionEvent OR (EventType=FileEvent SHA_Disposition=Malware)) | eval kind=if(EventType=="FileEvent","Malware (C9)","Intrusion (C6)") | stats count by kind]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="charting.chart">pie</option>
+        <option name="charting.fieldColors">{"Malware (C9)":0xdc4e41,"Intrusion (C6)":0xf58f39}</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Intrusion events — IPS drops/blocks (C6) · eStreamer</title>
+      <table>
+        <search><query><![CDATA[index=network sourcetype=cisco:sfw:estreamer EventType=IntrusionEvent | eval flow=InitiatorIP.":".InitiatorPort." → ".ResponderIP.":".ResponderPort | table _time IntrusionRuleMessage Classification flow InlineResult Impact UserName IntrusionPolicy | sort -_time]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="drilldown">none</option>
+        <option name="count">20</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Malware blocks — file policy C9-Malware (C9) · eStreamer</title>
+      <table>
+        <search><query><![CDATA[index=network sourcetype=cisco:sfw:estreamer EventType=FileEvent SHA_Disposition=Malware | eval flow=InitiatorIP." → ".ResponderIP.":".ResponderPort | table _time ThreatName FileName FileType FileAction flow UserName FilePolicy | sort -_time]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="drilldown">none</option>
+        <option name="count">20</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Rapid Threat Containment timeline — ISE ANC quarantine → CoA (index=ise)</title>
+      <table>
+        <search><query><![CDATA[index=ise ("CoASourceComponent=ANC" OR "ANCPolicy=Quarantine" OR "AuthorizationPolicyMatchedRule=ANC_Quarantine") | rex "Calling-Station-ID=(?<mac>[0-9A-Fa-f-]+)" | rex "NetworkDeviceName=(?<nad>[^,]+)" | rex "User-Name=(?<user>[^,]+)" | rex "CoAReason=(?<coareason>[^,]+)" | eval stage=case(match(_raw,"5205 NOTICE"),"1. CoA-Disconnect issued (OK)", match(_raw,"5417 NOTICE"),"2. CoA-Disconnect FAILED", match(_raw,"ANCPolicy=Quarantine"),"3. Quarantine re-auth (SGT 255)", true(),"ANC event") | eval who=coalesce(user,mac) | table _time stage who mac nad coareason | sort -_time]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="drilldown">none</option>
+        <option name="count">20</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Top intrusion signatures</title>
+      <chart>
+        <search><query><![CDATA[index=network sourcetype=cisco:sfw:estreamer EventType=IntrusionEvent | stats count by IntrusionRuleMessage | sort -count | head 8]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.legend.placement">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Top threat targets (destination IP)</title>
+      <table>
+        <search><query><![CDATA[index=network sourcetype=cisco:sfw:estreamer (EventType=IntrusionEvent OR (EventType=FileEvent SHA_Disposition=Malware)) | stats count as threats by ResponderIP | sort -threats | head 10]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+  </row>
+</form>

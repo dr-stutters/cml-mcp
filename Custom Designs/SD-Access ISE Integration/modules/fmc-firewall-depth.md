@@ -46,7 +46,9 @@ from HOST1 → issuer **`CN=Mitchcloud-Lab-Root-CA`** (ISE's *real* cert = bypas
 > was created at index 1 — re-GET before retrying, or you'll hit "Name already exists").
 
 ## End-state / note
-All five are attached to `SDA-ACP`/`SDA-Decrypt` and deployed. **C13 blocks CAMPUS→Splunk HTTP** — a
+All five are attached to `SDA-ACP`/`SDA-Decrypt` and deployed. **C13 blocked CAMPUS→Splunk HTTP** — a
 side effect on the HOST1→Splunk upload path used for C9/eStreamer connection generation (eStreamer
-pulls from FMC, so the dashboard is unaffected; disable/remove `C13-Block-HTTP-App` if you need that
-path back). EVE + URL + geo + AVC events all surface via the eStreamer feed ([[splunk-security-cloud]]).
+pulls from FMC, so the dashboard is unaffected). After the block was proven, **`C13-Block-HTTP-App` was
+left `enabled:false` + deployed (2026-07-18)** to restore that path — HOST1 `wget http://198.18.128.51:8000/`
+returns the Splunk login page again (`RC=0`). Re-enable the rule (PUT `enabled:true` + deploy) to re-demo
+the app-ID block. EVE + URL + geo + AVC events all surface via the eStreamer feed ([[splunk-security-cloud]]).

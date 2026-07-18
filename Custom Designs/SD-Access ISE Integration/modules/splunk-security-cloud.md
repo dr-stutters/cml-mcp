@@ -138,3 +138,24 @@ intrusion Drop/Block + malware Block + `cisco:ftd:connection:security`. ISE CoA 
 coalesces `who = user | mac`. Screenshot via headless playwright: log in at `:8000/en-US/account/login`,
 `goto` the view with **`wait_until="domcontentloaded"`** (dashboards never reach `networkidle`) + a
 ~38 s render wait; widen with `?form.tp.earliest=-2d%40d` so the 07-17 ISE CoAs and 07-18 threats co-show.
+
+## V3 — TLS Decryption dashboard (`sda_tls_decryption`, DONE 2026-07-18)
+Selective-decryption board over the FTD **connection-end** events (`%FTD-6-430003` → the SSL detail is
+**syslog-only**; the eStreamer JSON ConnectionEvent has **no** `SSL*` fields, verified). Base filter
+`index=network "SSLActualAction"` + `rex` on the colon-KV fields (`SSLActualAction`, `SSLRuleName`,
+`SSLPolicy`, `SSLServerCertStatus`, `SSLVersion`, `SSLFlowStatus`, `SSLCipherSuite`, `URL`, `User`,
+`EVE_*`). Panels: decrypt-vs-bypass (pie + timechart), the **policy→rule→action** decision path
+(`SDA-Decrypt` → `Decrypt-CAMPUS-443`=Decrypt (Resign) / `C16-DND-ISE`=Do Not Decrypt), **server-cert
+trust** (`SSLServerCertStatus` Valid vs Cert Untrusted = the resign-vs-untrusted split), TLS version,
+flow status (undecryptable reasons), a session detail table, and a **C14 EVE** panel (`EVE_Process` +
+confidences on the *bypassed* encrypted sessions — visibility without decryption).
+
+**Data-generation gotcha (important):** to populate this you need both a **Decrypt (Resign)** and a
+**Do Not Decrypt** sample. In this lab HOST1's **only reachable :443 is ISE** — FMC `.80`, CatC `.61/.62`,
+DC `.130`, and the CML box `.10` all **fail on 443 from CAMPUS** (no internet either), and ISE is
+*bypassed* by C16. So: fresh **DND** events come from `HOST1 → https://198.18.134.35` (wget follows the
+ISE redirect → ~3 connection events per wget), and the **resign** side reuses the genuine pre-C16 events
+(07-17, when `Decrypt-CAMPUS-443` was still resigning ISE:443) — those landed *before* the V7 5514
+re-point so they carry sourcetype **`cisco:ios`**, but the `"SSLActualAction"` phrase filter unions them
+with `cisco:ftd:connection` transparently. To regenerate a clean resign sample you'd have to temporarily
+disable C16 + deploy (not worth the churn — it just resigns ISE, which is what C16 exists to stop).

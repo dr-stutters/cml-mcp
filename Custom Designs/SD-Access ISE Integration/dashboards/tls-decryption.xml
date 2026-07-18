@@ -1,0 +1,127 @@
+<form version="1.1" theme="dark">
+  <label>SDA TLS Decryption — Selective Decrypt / Bypass (C8 + C16)</label>
+  <description>FTDv TLS-inspection outcomes on the SDA-Decrypt policy (index=network, %FTD-6-430003 connection-end events): sessions decrypted via Decrypt-Resign (C8, Decrypt-CAMPUS-443) vs bypassed via Do Not Decrypt (C16-DND-ISE), server-cert trust, TLS versions, undecryptable-flow status, and Encrypted Visibility Engine (C14) insight into the bypassed sessions. SD-Access ISE Integration lab.</description>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="tp">
+      <label>Time range</label>
+      <default><earliest>-7d@d</earliest><latest>now</latest></default>
+    </input>
+  </fieldset>
+
+  <row>
+    <panel>
+      <title>TLS sessions inspected</title>
+      <single>
+        <search><query><![CDATA[index=network "SSLActualAction" | stats count]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="rangeColors">["0x006d9c","0x006d9c"]</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Decrypted — Resign (C8)</title>
+      <single>
+        <search><query><![CDATA[index=network "SSLActualAction: Decrypt (Resign)" | stats count]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="rangeColors">["0x006d9c","0x006d9c"]</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Bypassed — Do Not Decrypt (C16)</title>
+      <single>
+        <search><query><![CDATA[index=network "SSLActualAction: Do Not Decrypt" | stats count]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="colorBy">value</option>
+        <option name="rangeColors">["0xf8be34","0xf8be34"]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Cert-untrusted servers</title>
+      <single>
+        <search><query><![CDATA[index=network "SSLServerCertStatus: Cert Untrusted" | stats count]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="colorBy">value</option>
+        <option name="rangeColors">["0xdc4e41","0xdc4e41"]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Decrypt vs Bypass</title>
+      <chart>
+        <search><query><![CDATA[index=network "SSLActualAction" | rex "SSLActualAction: (?<action>[^,]+)" | stats count by action]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="charting.chart">pie</option>
+        <option name="charting.fieldColors">{"Decrypt (Resign)":0x006d9c,"Do Not Decrypt":0xf8be34}</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>TLS inspection decision over time</title>
+      <chart>
+        <search><query><![CDATA[index=network "SSLActualAction" | rex "SSLActualAction: (?<action>[^,]+)" | timechart span=15m count by action]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.fieldColors">{"Decrypt (Resign)":0x006d9c,"Do Not Decrypt":0xf8be34}</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Decision path — SSL policy → rule → action</title>
+      <table>
+        <search><query><![CDATA[index=network "SSLActualAction" | rex "SSLActualAction: (?<action>[^,]+)" | rex "SSLRuleName: (?<rule>[^,]+)" | rex "SSLPolicy: (?<policy>[^,]+)" | rex "DstIP: (?<dst>[^,]+)" | stats count as sessions by policy rule action dst | sort -sessions]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Server certificate trust</title>
+      <chart>
+        <search><query><![CDATA[index=network "SSLActualAction" | rex "SSLServerCertStatus: (?<certstatus>[^,]+)" | stats count by certstatus]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="charting.chart">pie</option>
+        <option name="charting.fieldColors">{"Valid":0x53a051,"Cert Untrusted":0xdc4e41}</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Negotiated TLS version</title>
+      <chart>
+        <search><query><![CDATA[index=network "SSLActualAction" | rex "SSLVersion: (?<ver>[^,]+)" | stats count by ver | sort -count]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.legend.placement">none</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Flow status (undecryptable reasons)</title>
+      <chart>
+        <search><query><![CDATA[index=network "SSLActualAction" | rex "SSLFlowStatus: (?<flow>[^,]+)" | stats count by flow]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="charting.chart">pie</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>TLS inspection detail — session by session</title>
+      <table>
+        <search><query><![CDATA[index=network "SSLActualAction" | rex "SSLActualAction: (?<action>[^,]+)" | rex "SSLRuleName: (?<rule>[^,]+)" | rex "DstIP: (?<dst>[^,]+)" | rex "URL: (?<url>[^,]+)" | rex "SSLServerCertStatus: (?<certstatus>[^,]+)" | rex "SSLVersion: (?<ver>[^,]+)" | rex "SSLCipherSuite: (?<cipher>[^,]+)" | rex "User: (?<user>[^,]+)" | eval url=coalesce(url,"-") | table _time action rule dst url certstatus ver cipher user | sort -_time]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="drilldown">none</option>
+        <option name="count">25</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <title>Encrypted Visibility Engine (C14) — app insight without decryption · bypassed sessions</title>
+      <table>
+        <search><query><![CDATA[index=network "EVE_Process" | rex "EVE_Process: (?<eve_process>[^,]+)" | rex "EVE_ProcessConfidencePct: (?<proc_conf>\d+)" | rex "EVE_ThreatConfidencePct: (?<threat_conf>\d+)" | rex "SSLActualAction: (?<action>[^,]+)" | stats count as sessions, avg(proc_conf) as avg_proc_confidence, max(threat_conf) as max_threat_confidence by eve_process action | eval avg_proc_confidence=round(avg_proc_confidence,0) | sort -sessions]]></query><earliest>$tp.earliest$</earliest><latest>$tp.latest$</latest></search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+  </row>
+</form>

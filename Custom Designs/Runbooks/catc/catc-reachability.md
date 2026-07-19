@@ -17,13 +17,18 @@ est: 2m
 - [ ] `mcp.connected`
 
 ## Steps
-_TODO: fill during the first clean-room build — mine `Old/` for the proven procedure._
+1. **`catc_check`** — token auth + reachability against `CATC_URL` / `CATC_USERNAME` / `CATC_PASSWORD`
+   (from `../.env`). Returns `reachable` + `managed_device_count`.
+2. **`catc_version`** — the package manifest (core-platform, `sda`, `assurance`, `ise-bridge`,
+   `api-catalog`); confirms the SDA read package is present.
 
 ## Verify — prove `provides`
-catc_check returns version.
+`catc_check` → `reachable: true`; `catc_version` returns the manifest.
 
 ## Rollback
-_TODO_
+n/a (read-only).
 
 ## Gotchas
-- _none banked yet_
+- Catalyst Center is an **external appliance**, not a CML node. Ping may be blocked; `catc_check` (Intent-API
+  token auth) is the real reachability test.
+- Most CatC **writes are async** (`taskId` → poll; older ones use `executionId`) — the tools handle it.

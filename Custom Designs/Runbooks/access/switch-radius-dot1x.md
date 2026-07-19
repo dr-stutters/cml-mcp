@@ -51,3 +51,12 @@ conversion below is not cleanly reversible — CML `wipe` → day-0 is the clean
   intent (port auth template + pxGrid), or accept it's transient. (Confirmed 2026-07-19.)
 - Applying the IBNS `policy-map type control subscriber` **irreversibly** converts the switch to new-style
   CPL auth (prompts once). **iosvl2 / ioll2-xe can't do MAB at all** — cat9000v only.
+- **Additive 802.1X over a MAB baseline (proven 2026-07-19, all 3 architectures):** on the host port add
+  `dot1x pae authenticator` (keep `mab`); in the port's `policy-map type control subscriber` set
+  `authenticate using dot1x priority 10` then `authenticate using mab priority 20`; `clear access-session
+  interface <port>` to force a clean re-auth; `write memory`. When 802.1X succeeds, `show access-session …
+  details` shows **`dot1x Authc Success` / `mab Stopped`** — `Stopped` just means the higher-priority method
+  won, NOT a failure (MAB is still the fallback if dot1x is absent). Global prereqs from the MAB build already
+  satisfy it: `dot1x system-auth-control`, `aaa authentication dot1x default group <grp>`, `aaa authorization
+  network default group <grp>`. On a **fabric edge** the same change is additive to the fabric VLAN/dynamic-EID
+  (don't strip them); on a **CatC-managed edge** it's out-of-band drift (see the lab-2 gotcha above).

@@ -17,13 +17,20 @@ est: 5m
 - [ ] `ise.ad_joined`
 
 ## Steps
-_TODO: fill during the first clean-room build — mine `Old/` for the proven procedure._
+1. **Allowed protocols** — ensure Default Network Access permits **PEAP (MSCHAPv2)**, **EAP-TLS**, and
+   **EAP-MSCHAPv2** (usually already enabled — verify rather than recreate).
+2. **Identity source sequence `All_User_ID_Stores`** — order `[AD join point, then Internal Users]`.
+   `All_User_ID_Stores` is a **built-in** (unique name), so **edit it in place** (PUT); don't duplicate.
+   Keep `Preloaded_Certificate_Profile` as the cert-auth profile so EAP-TLS still resolves through it.
 
 ## Verify — prove `provides`
-Sequence present and selectable in policy.
+The sequence exists with `sequenceList = [<AD join point>, Internal Users]` and is selectable in a
+network-access authorization rule.
 
 ## Rollback
-_TODO_
+Restore the built-in's default `sequenceList` (`Internal Users, All_AD_Join_Points, Guest Users`).
 
 ## Gotchas
-- _none banked yet_
+- **`All_User_ID_Stores` already exists as a built-in** and names must be unique → shape the built-in,
+  don't create a duplicate. It's referenced by default policies, so editing it changes those (deliberate,
+  it's the intended identity backbone). (Proven 2026-07-18.)

@@ -304,7 +304,10 @@ ATOMS = [
       requires=["fmc.api"], provides=["ftd.registered"], params=["ftd.mgmt_ip", "reg.key"], est="15m",
       purpose="Register the FTDv to FMC (day-0 mode fixed up front).",
       verify="Device healthy/Managed in FMC.",
-      gotchas=["Gate registration on TCP 8305, not the API surface."]),
+      gotchas=["Gate on the FMC's ACTIVE LICENCE MODE (fmc_license_status -> EVALUATION/REGISTERED), "
+               "not on TCP 8305 - an external 8305 probe reads closed even when registration "
+               "succeeds, because sftunnel is the FTD dialling OUT. Unlicensed FMC = silent "
+               "REGISTRATION_FAILED after ~30s with the device record discarded."]),
     A(id="firewall/ftd-interfaces-zones", agent="firewall-engineer", human="none",
       requires=["ftd.registered"], provides=["ftd.interfaces"], params=["interfaces", "zones"], est="10m",
       purpose="Physical interfaces, security zones, routing.",

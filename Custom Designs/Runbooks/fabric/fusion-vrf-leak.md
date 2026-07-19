@@ -17,13 +17,19 @@ est: 10m
 - [ ] `fabric.handoff`
 
 ## Steps
-_TODO: fill during the first clean-room build — mine `Old/` for the proven procedure._
+1. **FUSION handoff + eBGP** — the fusion side of the Border↔FUSION /30, eBGP AS65000 ↔ AS65001, receiving
+   the VN prefix and advertising a default (`default-originate`) back to the border so the fabric gets a default route.
+2. **NAT overload** — `ip nat` overload the fabric pool `172.16.10.0/24` toward shared services / the mgmt
+   net, so fabric hosts reach ISE / DC / Splunk (198.18.x) with a routable source.
+3. **Static back-route to the fabric pool** — `ip route 172.16.10.0/24 10.1.24.1` on FUSION so return
+   traffic finds the border.
 
 ## Verify — prove `provides`
-Cross-VRF reachability fabric↔shared-services.
+Fabric host ↔ shared services both directions — e.g. HOST1 `ping 198.18.134.35` (ISE) **4/4, 0% loss** (proven 2026-07-18).
 
 ## Rollback
-_TODO_
+Remove the NAT, the static route, and the eBGP on FUSION.
 
 ## Gotchas
-- _none banked yet_
+- **FUSION needs the static back-route** to the fabric pool (`172.16.10.0/24 → 10.1.24.1`), or replies from
+  shared services have no path back into the fabric.

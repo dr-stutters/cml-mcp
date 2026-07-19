@@ -17,13 +17,18 @@ est: 10m
 - [ ] `catc.inventory`
 
 ## Steps
-_TODO: fill during the first clean-room build — mine `Old/` for the proven procedure._
+1. **Area** — `catc_create_area` `Global/SDA-Lab`.
+2. **Building** — `catc_create_building` `Global/SDA-Lab/Fabric-Bldg` (needs a lat/long — a geocodable
+   address).
+3. **Assign devices** — `catc_assign_devices_to_site` for the fabric device UUIDs (from `catc_list_devices`)
+   → the building.
 
 ## Verify — prove `provides`
-Sites created; devices assigned.
+`catc_site_membership` shows each device under `/Global/SDA-Lab/Fabric-Bldg/`.
 
 ## Rollback
-_TODO_
+`catc_delete_site_element` child-first (building → area).
 
 ## Gotchas
-- _none banked yet_
+- A building **requires lat/long** (geocoded address), not just a name.
+- Device assignment is **async** (`taskId`).

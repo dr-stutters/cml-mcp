@@ -59,12 +59,64 @@ _DIAGNOSTIC_TRUNCATION_HINT = (
     "include_diagnostics=false for the plain node object."
 )
 
+# Day-0 config is polymorphic in the CML API (NodeCreate/NodeUpdate
+# 'configuration' = string | NodeConfigurationFile | list[NodeConfigurationFile]).
+# The multi-file form is how cloud-init nodes (ubuntu/alpine/server) get
+# user-data + meta-data, and GET /labs/{id}/topology returns whichever form the
+# node was created with.
+_CONFIG_FILES_DESC = (
+    "Multi-file day-0 configuration: a list of {'name': ..., 'content': ...} "
+    "objects (e.g. [{'name': 'user-data', 'content': '#cloud-config\\n...'}, "
+    "{'name': 'meta-data', 'content': 'hostname: srv-1'}]). This is the "
+    "cloud-init form used by ubuntu/alpine/server node definitions. Mutually "
+    "exclusive with 'configuration' (which is the single-file form); pass at "
+    "most one of the two. Use the name 'Main' for the definition's main "
+    "configuration file."
+)
+
+_CONFIG_FILES_CONFLICT = (
+    "Error: Pass either configuration (single config string) or config_files "
+    "(list of {name, content} objects), not both. CML stores one 'configuration' "
+    "field per node and it holds either form."
+)
+
+_CONFIG_FILES_SHAPE = (
+    "Error: config_files must be a non-empty list of objects with a 'name' "
+    "(1-64 characters) and a 'content' string, e.g. "
+    "[{\"name\": \"user-data\", \"content\": \"#cloud-config\\n...\"}]."
+)
+
 _NOT_CONVERGED_NOTE = (
     "Not converged yet — the timeout elapsed while the node was still "
     "transitioning. This is NOT an API failure: the start/stop was accepted. "
     "Call cml_wait_for_node_converged (or this tool again) to keep waiting, or "
     "inspect progress with cml_get_node_console_log."
 )
+
+
+def _config_files_error(
+    configuration: str | None, config_files: list[dict[str, str]] | None
+) -> str | None:
+    """Pre-flight check for the two mutually exclusive day-0 config forms.
+
+    Returns the error message to hand back to the agent, or None when the pair
+    is usable. Runs before any HTTP call so a bad combination never reaches CML.
+    """
+    if configuration is not None and config_files is not None:
+        return _CONFIG_FILES_CONFLICT
+    if config_files is None:
+        return None
+    if not config_files:
+        return _CONFIG_FILES_SHAPE
+    for entry in config_files:
+        name = entry.get("name")
+        if not isinstance(name, str) or not 1 <= len(name) <= 64:
+            return _CONFIG_FILES_SHAPE
+        if not isinstance(entry.get("content"), str):
+            return _CONFIG_FILES_SHAPE
+        if set(entry) - {"name", "content"}:
+            return _CONFIG_FILES_SHAPE
+    return None
 
 
 def _unwrap_text(response: httpx.Response) -> str:
@@ -645,7 +697,14 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
         ] = 0,
         configuration: Annotated[
             str | None,
-            Field(description="Initial device configuration text (e.g. 'hostname rtr-1')."),
+            Field(
+                description="Initial device configuration text, single-file form "
+                "(e.g. 'hostname rtr-1'). Mutually exclusive with config_files."
+            ),
+        ] = None,
+        config_files: Annotated[
+            list[dict[str, str]] | None,
+            Field(description=_CONFIG_FILES_DESC, max_length=64),
         ] = None,
         image_definition: Annotated[
             str | None,
@@ -690,12 +749,45 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
         cml_set_node_state action='start'. Discover valid node_definition IDs
         via the system/definition tools.
 
+        Day-0 configuration is POLYMORPHIC in CML: the node's single
+        'configuration' field holds EITHER one config string (pass
+        configuration=...) OR a list of {"name", "content"} file objects (pass
+        config_files=[...]). The multi-file form is the cloud-init path used by
+        ubuntu/alpine/server definitions (user-data + meta-data); IOS-style
+        definitions want the plain string. GET /labs/{id}/topology and
+        cml_get_node return the configuration in whichever shape it was stored,
+        so expect either when you read a node back. Passing both is rejected
+        before any API call.
+
+        Interface LABEL SCHEMES differ per node definition — do not assume
+        Gi0/0 everywhere when you plan links or write day-0 config:
+          - iosv: Gi0/0-Gi0/3
+          - iosvl2: Gi0/0-Gi3/3 (16 ports across 4 slots)
+          - iol-xe / ioll2-xe: Ethernet0/0-Ethernet0/3, and these are 10 Mb
+            links — a "slow" speed in 'show interfaces' is expected, not a fault
+          - csr1000v / cat8000v: Gi1..GiN (numbering starts at 1, no slot)
+          - cat9000v: Gi1/0/1..Gi1/0/N data ports plus a Gi0/0 management port
+        Confirm against cml_get_node_definition / cml_get_node_interfaces when
+        in doubt.
+
+        Resource note (OBSERVATION, verify per install): Docker-nature node
+        definitions appear to be capped at 1 CPU regardless of the cpus value
+        sent here, while ram overrides do seem to take effect. If a Docker node
+        matters, compare what you requested against
+        cml_get_node(operational=true) after creation rather than trusting the
+        request.
+
         Returns:
             str: JSON {"id": "<new node UUID>"}, or "Error: ..."
             (404 -> lab_id doesn't exist; 400/422 -> unknown node_definition or
-            invalid field values).
+            invalid field values; a pre-flight "Error:" when configuration and
+            config_files are both given or config_files is malformed — no API
+            call is made in that case).
         """
         try:
+            invalid = _config_files_error(configuration, config_files)
+            if invalid:
+                return invalid
             body: dict[str, Any] = {
                 "label": label,
                 "node_definition": node_definition,
@@ -704,6 +796,10 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
             }
             if configuration is not None:
                 body["configuration"] = configuration
+            if config_files is not None:
+                # Sent verbatim: CML accepts the file list in the same
+                # 'configuration' field as the single-string form.
+                body["configuration"] = config_files
             if image_definition is not None:
                 body["image_definition"] = image_definition
             if ram is not None:
@@ -755,7 +851,16 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
         ] = None,
         configuration: Annotated[
             str | None,
-            Field(description="Replacement stored configuration text (e.g. 'hostname rtr-1')."),
+            Field(
+                description="Replacement stored configuration text, single-file form "
+                "(e.g. 'hostname rtr-1'). REPLACES the whole configuration field: on a "
+                "multi-file (cloud-init) node this discards the existing file list — "
+                "use config_files there instead. Mutually exclusive with config_files."
+            ),
+        ] = None,
+        config_files: Annotated[
+            list[dict[str, str]] | None,
+            Field(description=_CONFIG_FILES_DESC, max_length=64),
         ] = None,
         ram: Annotated[
             int | None, Field(description="New RAM in MB (e.g. 4096).", ge=1, le=1048576)
@@ -776,12 +881,29 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
         anytime. This does NOT touch the running device — a changed configuration applies on the
         next wipe+start.
 
+        Day-0 configuration is POLYMORPHIC in CML: the node's single
+        'configuration' field holds EITHER one config string OR a list of
+        {"name", "content"} file objects (the cloud-init form used by
+        ubuntu/alpine/server definitions: user-data + meta-data). Whichever you
+        send REPLACES the whole field, so read the node first with
+        cml_get_node(include_configuration=true) and match its shape: sending
+        configuration="..." to a multi-file node CLOBBERS its file list, and
+        sending config_files to a single-string node converts it. To change one
+        file of a multi-file node, resend the full list with that file edited.
+        Passing both parameters is rejected before any API call.
+
         Returns:
             str: Confirmation with the node ID, or "Error: ..."
             (404 -> lab_id or node_id doesn't exist; 400 -> a change is not
-            allowed in the node's current state — stop the node first).
+            allowed in the node's current state — stop the node first; a
+            pre-flight "Error:" when configuration and config_files are both
+            given, config_files is malformed, or no fields were provided — no
+            API call is made in those cases).
         """
         try:
+            invalid = _config_files_error(configuration, config_files)
+            if invalid:
+                return invalid
             body: dict[str, Any] = {}
             if label is not None:
                 body["label"] = label
@@ -791,6 +913,10 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
                 body["y"] = y
             if configuration is not None:
                 body["configuration"] = configuration
+            if config_files is not None:
+                # Same field as the single-string form — CML's 'configuration'
+                # accepts the file list verbatim.
+                body["configuration"] = config_files
             if ram is not None:
                 body["ram"] = ram
             if cpus is not None:
@@ -800,7 +926,7 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
             if not body:
                 return (
                     "Error: No fields to update. Provide at least one of label, x, y, "
-                    "configuration, ram, cpus, tags."
+                    "configuration, config_files, ram, cpus, tags."
                 )
             await client.request_json(
                 "PATCH", f"/labs/{lab_id}/nodes/{node_id}", json_body=body

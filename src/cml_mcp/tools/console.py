@@ -8,6 +8,14 @@ over SSH with the configured CML username/password. The generated YAML ships
 'change_me' placeholders there; this module injects the real credentials at
 runtime and never logs or returns them (nor the raw testbed content).
 
+The per-device credentials in that testbed are whatever CML generated from the
+node definitions, which is wrong for any lab whose day-0 config sets its own
+local user or enable secret — the console then hangs at the login prompt. The
+optional CML_MCP_DEVICE_USERNAME / CML_MCP_DEVICE_PASSWORD /
+CML_MCP_ENABLE_PASSWORD settings override them for every non-proxy device.
+They are deliberately environment-only: device secrets must never travel as
+tool arguments, where they would land in the model's context and transcripts.
+
 The testbed is loaded with the Genie loader so every device also exposes
 .parse(), turning raw CLI output into structured data when a parser exists.
 
@@ -98,7 +106,52 @@ NO_CONSOLE_NODES = (
 PARSE_FALLBACK_NOTE = (
     "No Genie parser matched this command on this device type; raw output shown."
 )
+LEARN_UNSUPPORTED_NOTE = (
+    "Genie has no operational model for this feature on this device's OS. Use "
+    "cml_run_commands with the equivalent show command instead."
+)
+LEARN_EMPTY_NOTE = (
+    "Genie learned this feature but the device reported no state for it, so it is "
+    "most likely not configured on this node."
+)
 NO_OUTPUT = "(command produced no output)"
+
+#: Genie ops models verified importable for iosxe in this environment. Exposed as
+#: the cml_learn_feature Literal so an unlearnable name is rejected by the input
+#: schema rather than after an SSH hop. ('config' is NOT a Genie ops feature.)
+LEARNABLE_FEATURES = Literal[
+    "acl",
+    "arp",
+    "bgp",
+    "dot1x",
+    "eigrp",
+    "fdb",
+    "hsrp",
+    "igmp",
+    "interface",
+    "isis",
+    "lag",
+    "lldp",
+    "mcast",
+    "msdp",
+    "nd",
+    "ntp",
+    "ospf",
+    "pim",
+    "platform",
+    "prefix_list",
+    "rip",
+    "route_policy",
+    "routing",
+    "static_routing",
+    "stp",
+    "vlan",
+    "vrf",
+    "vxlan",
+]
+#: A learn issues many show commands back to back, so it needs a bigger budget
+#: than a single command.
+LEARN_TIMEOUT_DEFAULT = 120
 
 
 def _pyats_available() -> bool:
@@ -138,6 +191,47 @@ def inject_terminal_server_credentials(
     return testbed_data
 
 
+def apply_device_credentials(
+    testbed_data: dict[str, Any],
+    username: str = "",
+    password: str = "",
+    enable_password: str = "",
+) -> dict[str, Any]:
+    """Override the per-device console credentials for every non-proxy device.
+
+    CML emits device credentials derived from the node definition, which do not
+    match a lab whose day-0 configuration defines its own local user or enable
+    secret; Unicon then sits at the login prompt until the connect timeout. Only
+    values that are actually configured are written, so an unset setting keeps
+    CML's own value. The terminal_server proxy is never touched — it uses the
+    CML account (see inject_terminal_server_credentials). Mutates and returns
+    testbed_data.
+    """
+    if not (username or password or enable_password):
+        return testbed_data
+    devices = testbed_data.get("devices")
+    if not isinstance(devices, dict):
+        return testbed_data
+    for label, device in devices.items():
+        if label == TERMINAL_SERVER or not isinstance(device, dict):
+            continue
+        credentials = device.setdefault("credentials", {})
+        if not isinstance(credentials, dict):
+            continue
+        if username or password:
+            default = credentials.setdefault("default", {})
+            if isinstance(default, dict):
+                if username:
+                    default["username"] = username
+                if password:
+                    default["password"] = password
+        if enable_password:
+            enable = credentials.setdefault("enable", {})
+            if isinstance(enable, dict):
+                enable["password"] = enable_password
+    return testbed_data
+
+
 def _load_testbed(path: str) -> Any:
     """Load a testbed YAML file with the Genie loader (deferred import).
 
@@ -151,6 +245,10 @@ def _load_testbed(path: str) -> Any:
 
 async def build_testbed(client: ApiClient, settings: Settings, lab_id: str) -> Any:
     """Fetch a lab's pyATS testbed, inject credentials, and load it.
+
+    Two credential patches happen here: the terminal_server proxy always gets the
+    CML account, and every other device gets the optional device/enable overrides
+    when they are configured.
 
     The credential-bearing YAML only ever exists in a 0o600 temporary file that
     is deleted before returning; it is never logged or returned to the agent.
@@ -167,6 +265,12 @@ async def build_testbed(client: ApiClient, settings: Settings, lab_id: str) -> A
             "or its testbed generation unsupported."
         )
     inject_terminal_server_credentials(data, settings.username, settings.password)
+    apply_device_credentials(
+        data,
+        settings.device_username,
+        settings.device_password,
+        settings.enable_password,
+    )
     handle = tempfile.NamedTemporaryFile("w", suffix=".yaml", encoding="utf-8", delete=False)
     try:
         os.fchmod(handle.fileno(), 0o600)
@@ -215,6 +319,32 @@ def _parse_output(device: Any, command: str, raw: str) -> Any | None:
     except Exception:
         return None
     return parsed if isinstance(parsed, dict | list) and parsed else None
+
+
+def _learn_feature(device: Any, feature: str) -> Any:
+    """Learn one feature on a connected device, returning the Genie Ops object.
+
+    The explicit get_ops() lookup makes 'this OS has no model for this feature'
+    a clean LookupError before any command is sent, instead of a confusing
+    failure deep inside the learn.
+    """
+    from genie.ops.utils import get_ops  # deferred: optional extra
+
+    get_ops(feature, device)
+    return device.learn(feature)
+
+
+def _learn_node_feature(device: Any, feature: str, timeout_seconds: int) -> dict[str, Any]:
+    """Connect if needed, learn a feature, and return its .info document (blocking)."""
+    _ensure_connected(device, timeout_seconds)
+    try:
+        learned = _learn_feature(device, feature)
+    except LookupError:
+        return {"note": LEARN_UNSUPPORTED_NOTE}
+    info = getattr(learned, "info", None)
+    if isinstance(info, dict) and info:
+        return info
+    return {"note": LEARN_EMPTY_NOTE}
 
 
 def _apply_config(device: Any, config_lines: str, timeout_seconds: int) -> str:
@@ -571,8 +701,11 @@ def _console_error(node_label: str, e: Exception) -> str:
     """Console failures without leaking pyATS logs (which can embed credentials)."""
     return (
         f"Error: console operation on node '{node_label}' failed ({type(e).__name__}). "
-        "Check that the node has fully finished booting (cml_get_node_console_log), that "
-        "its configured device credentials are valid, and retry with a larger timeout."
+        "Check that the node has fully finished booting (cml_get_node_console_log) and "
+        "retry with a larger timeout. If it is stuck at a login or enable prompt, the "
+        "device credentials CML generated do not match the lab's day-0 configuration: "
+        "set CML_MCP_DEVICE_USERNAME / CML_MCP_DEVICE_PASSWORD / CML_MCP_ENABLE_PASSWORD "
+        "on the server and retry."
     )
 
 
@@ -792,7 +925,11 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
         Only show/ping/traceroute/dir commands are allowed — for configuration
         changes use cml_send_config. Nodes must be BOOTED (cml_set_node_state
         then cml_wait_for_node_converged). Requires the optional pyATS extra
-        (uv sync --extra console) and configured CML username/password.
+        (uv sync --extra console) and configured CML username/password. If a node
+        fails at a login or enable prompt, the lab's day-0 config uses
+        credentials CML did not generate — set CML_MCP_DEVICE_USERNAME,
+        CML_MCP_DEVICE_PASSWORD and/or CML_MCP_ENABLE_PASSWORD on the server
+        (they are environment-only; never pass device secrets as arguments).
         Consoles are slow (seconds, not milliseconds); prefer the REST read
         tools when they can answer the question, and cml_ping_matrix for
         reachability sweeps.
@@ -897,9 +1034,12 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
         cml_extract_node_configuration afterwards to persist it.
 
         Nodes must be BOOTED. Requires the optional pyATS extra
-        (uv sync --extra console) and configured CML username/password. Send
-        identical lines to a group in one call; for per-node differences call
-        once per node. For read-only checks use cml_run_commands.
+        (uv sync --extra console) and configured CML username/password. If a node
+        fails at a login or enable prompt, set CML_MCP_DEVICE_USERNAME,
+        CML_MCP_DEVICE_PASSWORD and/or CML_MCP_ENABLE_PASSWORD on the server to
+        match the lab's day-0 credentials. Send identical lines to a group in one
+        call; for per-node differences call once per node. For read-only checks
+        use cml_run_commands.
 
         Args:
             lab_id: Lab UUID.
@@ -1009,8 +1149,11 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
         instead of failing the call. Source x target pairs are capped at 100 —
         scope bigger labs with source_nodes/target_ips and run several calls.
         Requires the optional pyATS extra (uv sync --extra console) and
-        configured CML username/password. Note this pings from the device's
-        default VRF; for VRF-aware or extended pings use cml_run_commands.
+        configured CML username/password; a source stuck at a login or enable
+        prompt means CML_MCP_DEVICE_USERNAME, CML_MCP_DEVICE_PASSWORD and/or
+        CML_MCP_ENABLE_PASSWORD need setting on the server. Note this pings from
+        the device's default VRF; for VRF-aware or extended pings use
+        cml_run_commands.
 
         Args:
             lab_id: Lab UUID.
@@ -1085,6 +1228,127 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
                 _render_matrix(lab_id, sources, targets, cells, node_errors),
                 settings,
                 truncation_hint="Scope the sweep with source_nodes and/or target_ips.",
+            )
+        except Exception as e:
+            return format_error(e)
+
+    @register_tool(
+        mcp,
+        ctx,
+        name="cml_learn_feature",
+        title="Learn Feature State",
+        read_only=True,
+        idempotent=True,
+        open_world=True,
+    )
+    async def cml_learn_feature(
+        lab_id: Annotated[
+            str, Field(description=LAB_ID_DESC, min_length=1, max_length=100)
+        ],
+        node_labels: Annotated[
+            list[str],
+            Field(
+                description=NODE_LABELS_DESC + " Use ['*'] for every console-capable node "
+                "in the lab (the terminal server proxy is always excluded). Learning is "
+                "slow, so keep this list to the nodes you actually need.",
+                min_length=1,
+                max_length=32,
+            ),
+        ],
+        feature: Annotated[
+            LEARNABLE_FEATURES,
+            Field(
+                description="Genie operational model to learn (e.g. 'ospf'). Each one runs "
+                "the whole set of show commands behind that protocol and returns one "
+                "structured document: 'bgp'/'ospf'/'eigrp'/'isis'/'rip' for routing "
+                "protocol neighbours and databases, 'routing' for the RIB, "
+                "'interface'/'arp'/'nd'/'lag' for L3 edge state, 'vlan'/'stp'/'fdb' for L2, "
+                "'vrf'/'acl'/'prefix_list'/'route_policy'/'static_routing' for policy, "
+                "'hsrp' for first-hop redundancy, 'igmp'/'pim'/'mcast'/'msdp' for "
+                "multicast, 'platform' for hardware/software inventory."
+            ),
+        ],
+        timeout_seconds: Annotated[
+            int,
+            Field(
+                description="Console connect timeout in seconds (e.g. 120). A learn issues "
+                "many show commands in a row, so give slow or busy consoles a large value.",
+                ge=30,
+                le=600,
+            ),
+        ] = LEARN_TIMEOUT_DEFAULT,
+        ctx: Context | None = None,  # injected by the SDK; not part of the input schema
+    ) -> str:
+        """Learn one protocol's complete operational state from booted lab nodes.
+
+        Read-only. Runs Genie's operational model for a feature (device.learn)
+        over each node's console: it issues every show command that feature needs
+        and merges the parsed output into ONE structured document — neighbours,
+        timers, databases, counters and the interfaces they run on — instead of
+        you guessing which show commands to chain together.
+
+        Use this to answer "what is the state of <protocol> here?" and to compare
+        the same document across nodes or before/after a change. Use
+        cml_run_commands instead when you need one specific command, exact CLI
+        wording, or a command outside the learnable feature list; use
+        cml_ping_matrix for plain reachability. A learn is much slower than a
+        single command (many round trips per node), so scope node_labels
+        tightly. Sessions are cached and shared with the other console tools.
+
+        Nodes must be BOOTED (cml_set_node_state then
+        cml_wait_for_node_converged). Requires the optional pyATS extra
+        (uv sync --extra console) and configured CML username/password. If a node
+        fails at a login or enable prompt, the lab's day-0 config uses
+        credentials CML did not generate — set CML_MCP_DEVICE_USERNAME,
+        CML_MCP_DEVICE_PASSWORD and/or CML_MCP_ENABLE_PASSWORD on the server.
+
+        Args:
+            lab_id: Lab UUID.
+            node_labels: Node labels, or ['*'] for every console-capable node.
+            feature: Genie ops model to learn (see the enumerated values).
+            timeout_seconds: Console connect timeout.
+
+        Returns:
+            str: JSON {node_label: <learned document>}. A node whose device OS
+            has no model for the feature, or that has nothing configured for it,
+            yields {"note": "..."} instead; a node that is missing, not BOOTED or
+            whose console fails yields {"error": "Error: ..."} — one bad node
+            never fails the call. These documents are large, so the response may
+            be truncated. On failure: "Error: ..." (404 -> lab_id doesn't exist).
+        """
+        if not _pyats_available():
+            return PYATS_MISSING
+        if not (settings.username and settings.password):
+            return MISSING_CREDENTIALS
+        try:
+            testbed, ready, errors = await _prepare(client, settings, lab_id, node_labels)
+            if not ready and not errors:
+                return NO_CONSOLE_NODES
+
+            def work(label: str, device: Any) -> dict[str, Any]:
+                return _learn_node_feature(device, feature, timeout_seconds)
+
+            outcomes = await _run_on_nodes(
+                lab_id,
+                testbed,
+                ready,
+                work,
+                ctx=ctx,
+                progress_label=f"Learning {feature}",
+            )
+            results: dict[str, Any] = {
+                label: {"error": message} for label, message in errors.items()
+            }
+            for label, (value, error) in outcomes.items():
+                results[label] = {"error": error} if error else value
+            ordered = {label: results[label] for label in sorted(results)}
+            return finalize(
+                to_json(ordered),
+                settings,
+                truncation_hint=(
+                    "Learned documents are large — ask for one node at a time, or use "
+                    "cml_run_commands with the specific show command you need."
+                ),
             )
         except Exception as e:
             return format_error(e)

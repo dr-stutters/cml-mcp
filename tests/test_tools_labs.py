@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import itertools
 import json
+from xml.etree import ElementTree
 
 import httpx
 import pytest
@@ -314,6 +315,210 @@ async def test_get_lab_layer3_addresses(mcp):
     )
     text = await call_tool_text(mcp, "cml_get_lab_layer3_addresses", {"lab_id": LAB_ID})
     assert json.loads(text)[NODE_ID]["name"] == "desktop-1"
+
+
+# ------------------------------------------------------------- SVG rendering
+
+SVG_TOPOLOGY = {
+    "lab": {"title": "CCNA study lab", "version": "0.2.2"},
+    "nodes": [
+        {
+            "id": NODE_ID,
+            "label": "r1",
+            "node_definition": "iosv",
+            "x": -100,
+            "y": 40,
+            "interfaces": [{"id": "i-a", "label": "GigabitEthernet0/0"}],
+        },
+        {
+            "id": NODE_ID_2,
+            "label": "r2",
+            "node_definition": "iosv",
+            "x": 260,
+            "y": 320,
+            "interfaces": [{"id": "i-b", "label": "GigabitEthernet0/1"}],
+        },
+    ],
+    "links": [
+        {
+            "id": "link-1",
+            "node_a": NODE_ID,
+            "node_b": NODE_ID_2,
+            "interface_a": "i-a",
+            "interface_b": "i-b",
+        }
+    ],
+    "annotations": [],
+    "smart_annotations": [],
+}
+
+L3_ADDRESSES = {
+    NODE_ID: {
+        "name": "r1",
+        "interfaces": {"52:54:00:00:00:01": {"ip4": ["192.0.2.10"], "ip6": []}},
+    }
+}
+
+
+def _mock_render_endpoints(topology=None, *, state=True, addresses=None):
+    """Mock the three endpoints the renderer composes; returns the routes."""
+    topology_route = respx.get(f"{BASE_URL}/labs/{LAB_ID}/topology").mock(
+        return_value=httpx.Response(200, json=SVG_TOPOLOGY if topology is None else topology)
+    )
+    state_route = respx.get(f"{BASE_URL}/labs/{LAB_ID}/lab_element_state").mock(
+        return_value=httpx.Response(200, json=ELEMENT_STATE)
+        if state
+        else httpx.Response(503, json={"description": "Simulation engine busy"})
+    )
+    address_route = respx.get(f"{BASE_URL}/labs/{LAB_ID}/layer3_addresses").mock(
+        return_value=httpx.Response(200, json=addresses if addresses is not None else {})
+    )
+    return topology_route, state_route, address_route
+
+
+@respx.mock
+async def test_render_topology_svg_writes_parseable_document(mcp, tmp_path):
+    topology_route, state_route, address_route = _mock_render_endpoints()
+    target = tmp_path / "ccna.svg"
+    text = await call_tool_text(
+        mcp, "cml_render_topology_svg", {"lab_id": LAB_ID, "output_path": str(target)}
+    )
+    assert not text.startswith("Error:")
+    assert topology_route.called and state_route.called
+    assert not address_route.called  # include_addresses defaults to false
+
+    svg = target.read_text(encoding="utf-8")
+    assert svg.startswith("<svg")
+    root = ElementTree.fromstring(svg)  # must be well-formed XML
+    assert root.tag.endswith("svg")
+    texts = [el.text for el in root.iter() if el.text]
+    assert "r1" in texts and "r2" in texts  # node labels
+    assert "iosv" in texts  # node definition
+    assert "BOOTED" in texts and "STOPPED" in texts  # state badges
+    assert "GigabitEthernet0/0" in texts  # interface label near the link end
+    lines = [el for el in root.iter() if el.tag.endswith("line")]
+    assert len(lines) == 1  # one link
+    assert len([el for el in root.iter() if el.tag.endswith("rect")]) == 3  # bg + 2 nodes
+
+    assert str(target) in text
+    assert f"({len(target.read_bytes())} bytes)" in text
+    assert "2 nodes, 1 links" in text
+    assert "CML's own canvas coordinates" in text
+    assert "browser" in text
+
+
+@respx.mock
+async def test_render_topology_svg_default_path_and_addresses(mcp, tmp_path, monkeypatch):
+    monkeypatch.setattr("cml_mcp.tools.labs.tempfile.gettempdir", lambda: str(tmp_path))
+    _, _, address_route = _mock_render_endpoints(addresses=L3_ADDRESSES)
+    text = await call_tool_text(
+        mcp, "cml_render_topology_svg", {"lab_id": LAB_ID, "include_addresses": True}
+    )
+    assert address_route.called
+    written = tmp_path / f"cml-topology-{LAB_ID}.svg"
+    assert written.exists()
+    assert str(written) in text
+    assert "annotated under 1 node(s)" in text
+    svg = written.read_text(encoding="utf-8")
+    ElementTree.fromstring(svg)
+    assert "192.0.2.10" in svg
+
+
+@respx.mock
+async def test_render_topology_svg_survives_failed_state_and_address_probes(mcp, tmp_path):
+    """The L3 probe and the state probe are best-effort: the render still happens."""
+    respx.get(f"{BASE_URL}/labs/{LAB_ID}/topology").mock(
+        return_value=httpx.Response(200, json=SVG_TOPOLOGY)
+    )
+    respx.get(f"{BASE_URL}/labs/{LAB_ID}/lab_element_state").mock(
+        return_value=httpx.Response(500, json={"description": "boom"})
+    )
+    respx.get(f"{BASE_URL}/labs/{LAB_ID}/layer3_addresses").mock(
+        return_value=httpx.Response(404, json={"description": "Lab not found"})
+    )
+    target = tmp_path / "degraded.svg"
+    text = await call_tool_text(
+        mcp,
+        "cml_render_topology_svg",
+        {"lab_id": LAB_ID, "output_path": str(target), "include_addresses": True},
+    )
+    assert not text.startswith("Error:")
+    assert "Runtime state was unavailable" in text
+    assert "Layer-3 addresses could not be read" in text
+    svg = target.read_text(encoding="utf-8")
+    assert "UNKNOWN" in [el.text for el in ElementTree.fromstring(svg).iter()]
+
+
+@respx.mock
+async def test_render_topology_svg_empty_lab_renders(mcp, tmp_path):
+    _mock_render_endpoints({"lab": {"title": "Empty lab"}, "nodes": [], "links": []})
+    target = tmp_path / "empty.svg"
+    text = await call_tool_text(
+        mcp, "cml_render_topology_svg", {"lab_id": LAB_ID, "output_path": str(target)}
+    )
+    assert not text.startswith("Error:")
+    assert "0 nodes, 0 links" in text
+    svg = target.read_text(encoding="utf-8")
+    assert svg.startswith("<svg")
+    ElementTree.fromstring(svg)  # a zero-node lab is still a valid document
+
+
+@respx.mock
+async def test_render_topology_svg_falls_back_to_grid_without_coordinates(mcp, tmp_path):
+    """Missing/identical coordinates must not collapse every node onto one point."""
+    topology = json.loads(json.dumps(SVG_TOPOLOGY))
+    for node in topology["nodes"]:
+        node["x"] = 0
+        node["y"] = 0
+    _mock_render_endpoints(topology)
+    target = tmp_path / "grid.svg"
+    text = await call_tool_text(
+        mcp, "cml_render_topology_svg", {"lab_id": LAB_ID, "output_path": str(target)}
+    )
+    assert "generated grid" in text
+    rects = [
+        el
+        for el in ElementTree.fromstring(target.read_text(encoding="utf-8")).iter()
+        if el.tag.endswith("rect") and el.get("rx")
+    ]
+    assert len({(r.get("x"), r.get("y")) for r in rects}) == 2  # distinct positions
+
+
+@respx.mock
+async def test_render_topology_svg_escapes_hostile_labels(mcp, tmp_path):
+    topology = json.loads(json.dumps(SVG_TOPOLOGY))
+    topology["nodes"][0]["label"] = "R1 & <b>"
+    topology["lab"]["title"] = 'Lab "quoted" & <script>'
+    _mock_render_endpoints(topology)
+    target = tmp_path / "escaped.svg"
+    text = await call_tool_text(
+        mcp, "cml_render_topology_svg", {"lab_id": LAB_ID, "output_path": str(target)}
+    )
+    assert not text.startswith("Error:")
+    svg = target.read_text(encoding="utf-8")
+    assert "<b>" not in svg and "<script>" not in svg
+    assert "&amp;" in svg and "&lt;b&gt;" in svg
+    texts = [el.text for el in ElementTree.fromstring(svg).iter() if el.text]
+    assert "R1 & <b>" in texts  # escaped on the wire, intact once parsed
+
+
+@respx.mock
+async def test_render_topology_svg_404_error_is_string(make_settings, tmp_path):
+    mcp = build_server(make_settings(enable_writes=True, max_retries=0))
+    respx.get(f"{BASE_URL}/labs/{LAB_ID}/topology").mock(
+        return_value=httpx.Response(404, json={"description": "Lab not found"})
+    )
+    respx.get(f"{BASE_URL}/labs/{LAB_ID}/lab_element_state").mock(
+        return_value=httpx.Response(200, json=ELEMENT_STATE)
+    )
+    text = await call_tool_text(
+        mcp,
+        "cml_render_topology_svg",
+        {"lab_id": LAB_ID, "output_path": str(tmp_path / "nope.svg")},
+    )
+    assert text.startswith("Error:")
+    assert "404" in text
+    assert not (tmp_path / "nope.svg").exists()  # nothing written on failure
 
 
 @respx.mock

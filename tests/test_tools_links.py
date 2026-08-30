@@ -10,6 +10,7 @@ import pytest
 import respx
 
 from cml_mcp.server import build_server
+from cml_mcp.tools.links import match_interface
 from tests.conftest import BASE_URL, call_tool_text
 
 LAB = "11111111-2222-4333-8444-555555555555"
@@ -504,3 +505,237 @@ async def test_download_link_pcap_empty_body_is_actionable_error(mcp, tmp_path):
     assert text.startswith("Error:")
     assert "cml_set_link_capture" in text
     assert not out.exists()  # nothing written for an empty capture
+
+
+# ------------------------------------------- interface-label pinning (matcher)
+
+_IFACES = [
+    {"id": "i1", "label": "GigabitEthernet0/1", "type": "physical", "is_connected": False},
+    {"id": "i2", "label": "GigabitEthernet0/2", "type": "physical", "is_connected": False},
+    {"id": "i3", "label": "Loopback0", "type": "loopback", "is_connected": False},
+]
+
+
+def test_matcher_exact_and_abbreviation():
+    assert match_interface("GigabitEthernet0/1", _IFACES, "R1")["id"] == "i1"
+    assert match_interface("gi0/2", _IFACES, "R1")["id"] == "i2"
+    assert match_interface("G0/1", _IFACES, "R1")["id"] == "i1"
+
+
+def test_matcher_no_numeric_normalization_and_loopback_excluded():
+    assert match_interface("Gi0/01", _IFACES, "R1") is None  # tails compared as strings
+    assert match_interface("Loopback0", _IFACES, "R1") is None  # physical only
+
+
+def test_matcher_ambiguous_raises():
+    ifaces = [
+        {"id": "a", "label": "GigabitEthernet1", "type": "physical"},
+        {"id": "b", "label": "GigE1", "type": "physical"},
+    ]
+    with pytest.raises(ValueError) as ei:
+        match_interface("g1", ifaces, "R1")
+    assert "ambiguous" in str(ei.value)
+
+
+def test_matcher_linux_names():
+    ifaces = [{"id": "e", "label": "ens2", "type": "physical"},
+              {"id": "p", "label": "port", "type": "physical"}]
+    assert match_interface("ens2", ifaces, "AP")["id"] == "e"
+    assert match_interface("port", ifaces, "EXT")["id"] == "p"
+
+
+# ------------------------------------- interface-label pinning (cml_create_link)
+
+NODE_A = "aaaa1111-2222-4333-8444-555555555555"
+NODE_B = "bbbb1111-2222-4333-8444-555555555555"
+
+NODES = [
+    {"id": NODE_A, "label": "R1", "state": "STARTED"},
+    {"id": NODE_B, "label": "R2", "state": "STARTED"},
+]
+
+
+def _node_ifaces(prefix: str) -> list[dict]:
+    return [
+        {
+            "id": f"{prefix}-lo0",
+            "label": "Loopback0",
+            "type": "loopback",
+            "is_connected": False,
+        },
+        {
+            "id": f"{prefix}-gi0",
+            "label": "GigabitEthernet0/0",
+            "type": "physical",
+            "is_connected": True,
+        },
+        {
+            "id": f"{prefix}-gi1",
+            "label": "GigabitEthernet0/1",
+            "type": "physical",
+            "is_connected": False,
+        },
+    ]
+
+
+@respx.mock
+async def test_create_link_by_interface_label_abbreviation(mcp):
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes").mock(return_value=httpx.Response(200, json=NODES))
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes/{NODE_A}/interfaces").mock(
+        return_value=httpx.Response(200, json=_node_ifaces("a"))
+    )
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes/{NODE_B}/interfaces").mock(
+        return_value=httpx.Response(200, json=_node_ifaces("b"))
+    )
+    route = respx.post(f"{BASE_URL}/labs/{LAB}/links").mock(
+        return_value=httpx.Response(200, json={"id": LINK})
+    )
+    text = await call_tool_text(
+        mcp,
+        "cml_create_link",
+        {
+            "lab_id": LAB,
+            "src_node": "R1",
+            "src_int_label": "Gi0/1",
+            "dst_node": "R2",
+            "dst_int_label": "gigabitethernet0/1",
+        },
+    )
+    assert json.loads(text)["id"] == LINK
+    assert json.loads(route.calls[0].request.content) == {
+        "src_int": "a-gi1",
+        "dst_int": "b-gi1",
+    }
+
+
+@respx.mock
+async def test_create_link_label_on_one_side_auto_picks_the_other(mcp):
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes").mock(return_value=httpx.Response(200, json=NODES))
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes/{NODE_A}/interfaces").mock(
+        return_value=httpx.Response(200, json=_node_ifaces("a"))
+    )
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes/{NODE_B}/interfaces").mock(
+        return_value=httpx.Response(200, json=_node_ifaces("b"))
+    )
+    route = respx.post(f"{BASE_URL}/labs/{LAB}/links").mock(
+        return_value=httpx.Response(200, json={"id": LINK})
+    )
+    text = await call_tool_text(
+        mcp,
+        "cml_create_link",
+        {"lab_id": LAB, "src_node": "R1", "src_int_label": "Gi0/1", "dst_node": "R2"},
+    )
+    assert json.loads(text)["id"] == LINK
+    # dst auto-pick skips the loopback and the already-connected Gi0/0.
+    assert json.loads(route.calls[0].request.content) == {
+        "src_int": "a-gi1",
+        "dst_int": "b-gi1",
+    }
+
+
+@respx.mock
+async def test_create_link_label_not_found_lists_labels_and_points_at_definition(mcp):
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes").mock(return_value=httpx.Response(200, json=NODES))
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes/{NODE_A}/interfaces").mock(
+        return_value=httpx.Response(200, json=_node_ifaces("a"))
+    )
+    post = respx.post(f"{BASE_URL}/labs/{LAB}/links").mock(
+        return_value=httpx.Response(200, json={"id": LINK})
+    )
+    text = await call_tool_text(
+        mcp,
+        "cml_create_link",
+        {"lab_id": LAB, "src_node": "R1", "src_int_label": "Te0/9", "dst_int": IFACE},
+    )
+    assert text.startswith("Error:")
+    assert "GigabitEthernet0/0, GigabitEthernet0/1" in text  # physical labels only
+    assert "Loopback0" not in text
+    assert text.rstrip().endswith(
+        "this node definition may not produce that label; check cml_get_node_definition."
+    )
+    assert not post.called  # no link created on a failed resolve
+
+
+@respx.mock
+async def test_create_link_ambiguous_label_names_candidates(mcp):
+    ifaces = [
+        {"id": "a1", "label": "GigabitEthernet1", "type": "physical", "is_connected": False},
+        {"id": "a2", "label": "GigE1", "type": "physical", "is_connected": False},
+    ]
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes").mock(return_value=httpx.Response(200, json=NODES))
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes/{NODE_A}/interfaces").mock(
+        return_value=httpx.Response(200, json=ifaces)
+    )
+    post = respx.post(f"{BASE_URL}/labs/{LAB}/links").mock(
+        return_value=httpx.Response(200, json={"id": LINK})
+    )
+    text = await call_tool_text(
+        mcp,
+        "cml_create_link",
+        {"lab_id": LAB, "src_node": "R1", "src_int_label": "g1", "dst_int": IFACE},
+    )
+    assert text.startswith("Error:")
+    assert "ambiguous" in text
+    assert "GigabitEthernet1" in text and "GigE1" in text
+    assert not post.called
+
+
+@respx.mock
+async def test_create_link_label_without_node_is_preflight_error(mcp):
+    nodes = respx.get(f"{BASE_URL}/labs/{LAB}/nodes").mock(
+        return_value=httpx.Response(200, json=NODES)
+    )
+    text = await call_tool_text(
+        mcp,
+        "cml_create_link",
+        {"lab_id": LAB, "src_int_label": "Gi0/1", "dst_int": IFACE},
+    )
+    assert text.startswith("Error:")
+    assert "src_node" in text
+    assert not nodes.called  # rejected before any HTTP call
+
+
+@respx.mock
+async def test_create_link_int_and_label_together_is_preflight_error(mcp):
+    nodes = respx.get(f"{BASE_URL}/labs/{LAB}/nodes").mock(
+        return_value=httpx.Response(200, json=NODES)
+    )
+    text = await call_tool_text(
+        mcp,
+        "cml_create_link",
+        {
+            "lab_id": LAB,
+            "src_int": "iface-2",
+            "src_int_label": "Gi0/1",
+            "dst_int": IFACE,
+        },
+    )
+    assert text.startswith("Error:")
+    assert "mutually exclusive" in text
+    assert not nodes.called
+
+
+@respx.mock
+async def test_create_link_neither_int_nor_node_is_preflight_error(mcp):
+    nodes = respx.get(f"{BASE_URL}/labs/{LAB}/nodes").mock(
+        return_value=httpx.Response(200, json=NODES)
+    )
+    text = await call_tool_text(mcp, "cml_create_link", {"lab_id": LAB, "src_int": "iface-2"})
+    assert text.startswith("Error:")
+    assert "dst_int" in text and "dst_node" in text
+    assert not nodes.called
+
+
+@respx.mock
+async def test_create_link_label_resolve_http_error_string(mcp):
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes").mock(return_value=httpx.Response(200, json=NODES))
+    respx.get(f"{BASE_URL}/labs/{LAB}/nodes/{NODE_A}/interfaces").mock(
+        return_value=httpx.Response(404)
+    )
+    text = await call_tool_text(
+        mcp,
+        "cml_create_link",
+        {"lab_id": LAB, "src_node": "R1", "src_int_label": "Gi0/1", "dst_int": IFACE},
+    )
+    assert text.startswith("Error:")
+    assert "404" in text

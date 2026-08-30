@@ -33,7 +33,7 @@ def test_static_token_header_variants():
 
 @respx.mock
 async def test_login_json_body_json_token():
-    """CML-style credentials in body; Catalyst-style token in JSON field."""
+    """Credentials as a JSON body; token in a JSON response field."""
     route = respx.post(f"{BASE_URL}/auth/login").mock(
         return_value=httpx.Response(200, json={"token": "abc123"})
     )
@@ -50,9 +50,9 @@ async def test_login_json_body_json_token():
 
 @respx.mock
 async def test_login_basic_header_token():
-    """FMC-style: basic auth on login, token in a response header."""
+    """Basic auth on login; token arrives in a response header."""
     respx.post(f"{BASE_URL}/auth/generatetoken").mock(
-        return_value=httpx.Response(204, headers={"X-auth-access-token": "fmc-tok"})
+        return_value=httpx.Response(204, headers={"X-auth-access-token": "hdr-tok"})
     )
     auth = LoginTokenAuth(
         "/auth/generatetoken",
@@ -66,12 +66,12 @@ async def test_login_basic_header_token():
     )
     async with httpx.AsyncClient(base_url=BASE_URL) as http:
         await auth.ensure_authenticated(http)
-    assert auth.headers() == {"X-auth-access-token": "fmc-tok"}
+    assert auth.headers() == {"X-auth-access-token": "hdr-tok"}
 
 
 @respx.mock
 async def test_login_body_token():
-    """CML-style: the whole response body is the token (a JSON-encoded string)."""
+    """The whole response body is the token (a JSON-encoded string) — the CML flow."""
     respx.post(f"{BASE_URL}/api/v0/authenticate").mock(
         return_value=httpx.Response(200, json="jwt-token-value")
     )

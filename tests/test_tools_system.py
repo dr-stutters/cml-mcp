@@ -537,3 +537,224 @@ async def test_delete_group_404_error(mcp):
     text = await call_tool_text(mcp, "cml_delete_group", {"group_id": UUID_A})
     assert text.startswith("Error:")
     assert "404" in text
+
+
+@respx.mock
+async def test_sync_external_connectors_markdown(mcp):
+    route = respx.put(f"{BASE_URL}/system/external_connectors").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "id": UUID_A,
+                    "label": "Bridge 1",
+                    "device_name": "bridge1",
+                    "operational": "OK",
+                    "tags": [],
+                    "interface": None,
+                }
+            ],
+        )
+    )
+    text = await call_tool_text(mcp, "cml_sync_external_connectors", {})
+    assert "**Bridge 1**" in text and UUID_A in text
+    assert "device: bridge1" in text
+    sent = json.loads(route.calls[0].request.content)
+    assert sent == {"push_configured_state": True}
+
+
+@respx.mock
+async def test_sync_external_connectors_preserves_host_state(mcp):
+    route = respx.put(f"{BASE_URL}/system/external_connectors").mock(
+        return_value=httpx.Response(200, json=[{"id": UUID_A, "label": "ISP1"}])
+    )
+    text = await call_tool_text(
+        mcp,
+        "cml_sync_external_connectors",
+        {"push_configured_state": False, "response_format": "json"},
+    )
+    assert json.loads(text) == [{"id": UUID_A, "label": "ISP1"}]
+    assert json.loads(route.calls[0].request.content) == {"push_configured_state": False}
+
+
+@respx.mock
+async def test_sync_external_connectors_403_error(mcp):
+    respx.put(f"{BASE_URL}/system/external_connectors").mock(
+        return_value=httpx.Response(403)
+    )
+    text = await call_tool_text(mcp, "cml_sync_external_connectors", {})
+    assert text.startswith("Error:")
+    assert "403" in text
+
+
+@respx.mock
+async def test_update_external_connector_sends_body(mcp):
+    route = respx.patch(f"{BASE_URL}/system/external_connectors/{UUID_A}").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": UUID_A,
+                "label": "ISP1",
+                "device_name": "bridge1",
+                "tags": ["ISP1"],
+                "protected": False,
+                "snooped": True,
+            },
+        )
+    )
+    text = await call_tool_text(
+        mcp,
+        "cml_update_external_connector",
+        {
+            "connector_id": UUID_A,
+            "label": "ISP1",
+            "tags": ["ISP1"],
+            "protected": False,
+            "snooped": True,
+        },
+    )
+    data = json.loads(text)
+    assert data["label"] == "ISP1"
+    assert data["protected"] is False
+    sent = json.loads(route.calls[0].request.content)
+    assert sent == {
+        "label": "ISP1",
+        "tags": ["ISP1"],
+        "protected": False,
+        "snooped": True,
+    }
+
+
+@respx.mock
+async def test_update_external_connector_omits_unset_fields(mcp):
+    route = respx.patch(f"{BASE_URL}/system/external_connectors/{UUID_A}").mock(
+        return_value=httpx.Response(200, json={"id": UUID_A, "label": "NAT", "protected": False})
+    )
+    await call_tool_text(
+        mcp, "cml_update_external_connector", {"connector_id": UUID_A, "protected": False}
+    )
+    assert json.loads(route.calls[0].request.content) == {"protected": False}
+
+
+async def test_update_external_connector_requires_a_field(mcp):
+    text = await call_tool_text(
+        mcp, "cml_update_external_connector", {"connector_id": UUID_A}
+    )
+    assert text.startswith("Error: No fields to update")
+
+
+@respx.mock
+async def test_update_external_connector_404_error(mcp):
+    respx.patch(f"{BASE_URL}/system/external_connectors/{UUID_A}").mock(
+        return_value=httpx.Response(404)
+    )
+    text = await call_tool_text(
+        mcp, "cml_update_external_connector", {"connector_id": UUID_A, "label": "ISP1"}
+    )
+    assert text.startswith("Error:")
+    assert "404" in text
+
+
+@respx.mock
+async def test_get_diagnostics_node_launch_queue_markdown(mcp):
+    respx.get(f"{BASE_URL}/diagnostics/node_launch_queue").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "node_id": UUID_A,
+                    "lab_id": UUID_B,
+                    "user_id": UUID_B,
+                    "queued_time": 1756512000,
+                    "priority": 10,
+                    "dependencies": [UUID_B],
+                    "resource_requirements": {
+                        "cpus": 2,
+                        "cpu_limit": 100,
+                        "cpu_points": None,
+                        "ram": 4096,
+                        "disk": 16,
+                    },
+                }
+            ],
+        )
+    )
+    text = await call_tool_text(
+        mcp, "cml_get_diagnostics", {"category": "node_launch_queue"}
+    )
+    assert "Node Launch Queue (1 waiting)" in text
+    assert UUID_A in text
+    assert "priority: 10" in text
+    assert "waiting on 1 node(s)" in text
+    assert "needs cpus=2, ram=4096" in text
+
+
+@respx.mock
+async def test_get_diagnostics_empty_launch_queue_says_not_queued(mcp):
+    respx.get(f"{BASE_URL}/diagnostics/node_launch_queue").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    text = await call_tool_text(
+        mcp, "cml_get_diagnostics", {"category": "node_launch_queue"}
+    )
+    assert "Node Launch Queue (0)" in text
+    assert "not queued" in text
+
+
+@respx.mock
+async def test_get_diagnostics_startup_scheduler_markdown(mcp):
+    respx.get(f"{BASE_URL}/diagnostics/startup_scheduler").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "licensing_loaded": None,
+                "core_driver_connected": True,
+                "node_definitions_loaded": True,
+                "lld_connected": True,
+                "lld_synced": False,
+                "system_ready": False,
+            },
+        )
+    )
+    text = await call_tool_text(
+        mcp, "cml_get_diagnostics", {"category": "startup_scheduler"}
+    )
+    assert "System ready: no" in text
+    assert "Licensing loaded: unknown" in text
+    assert "LLD synced: no" in text
+    assert "DEFINED_ON_CORE" in text
+
+
+@respx.mock
+async def test_get_diagnostics_other_category_json(mcp):
+    respx.get(f"{BASE_URL}/diagnostics/services").mock(
+        return_value=httpx.Response(200, json={"virl2-controller": "running"})
+    )
+    text = await call_tool_text(
+        mcp, "cml_get_diagnostics", {"category": "services", "response_format": "json"}
+    )
+    assert json.loads(text) == {"virl2-controller": "running"}
+
+
+@respx.mock
+async def test_get_diagnostics_other_category_markdown_embeds_document(mcp):
+    respx.get(f"{BASE_URL}/diagnostics/computes").mock(
+        return_value=httpx.Response(200, json={UUID_A: {"hostname": "cml-controller"}})
+    )
+    text = await call_tool_text(mcp, "cml_get_diagnostics", {"category": "computes"})
+    assert "# Diagnostics: computes (1 keys)" in text
+    assert "cml-controller" in text
+
+
+async def test_get_diagnostics_rejects_unknown_category(mcp):
+    # The Literal keeps bad categories out of the URL: schema validation, no request.
+    with pytest.raises(Exception, match="category"):
+        await call_tool_text(mcp, "cml_get_diagnostics", {"category": "not_a_category"})
+
+
+@respx.mock
+async def test_get_diagnostics_403_error(mcp):
+    respx.get(f"{BASE_URL}/diagnostics/labs").mock(return_value=httpx.Response(403))
+    text = await call_tool_text(mcp, "cml_get_diagnostics", {"category": "labs"})
+    assert text.startswith("Error:")
+    assert "403" in text

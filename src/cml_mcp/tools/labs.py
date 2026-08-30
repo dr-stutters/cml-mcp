@@ -1,9 +1,9 @@
 """CML lab tools — discovery, state/telemetry reads, and lab lifecycle writes.
 
 Read tools cover the lab collection (/labs with with_data=true), single-lab
-details, topology (compact summary or raw JSON), element state, layer-3
-addresses, events, simulation stats, sample labs, lab associations, and the two
-YAML text exports (lab download, pyATS testbed).
+details, topology (compact summary, raw JSON, or a rendered SVG diagram),
+element state, layer-3 addresses, events, simulation stats, sample labs, lab
+associations, and the two YAML text exports (lab download, pyATS testbed).
 
 Write tools cover create/update/import/restore, sample-lab loading, day-0
 bootstrap, snapshotting, association changes, plus the lifecycle transitions
@@ -24,17 +24,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from xml.sax.saxutils import escape
 
 import httpx
 import yaml
 from mcp.server.mcpserver import Context, MCPServer
 from pydantic import Field
 
-from cml_mcp.errors import format_error
+from cml_mcp.errors import PlatformError, format_error
 from cml_mcp.formatting import ResponseFormat, finalize, pagination_envelope, to_json
 from cml_mcp.polling import wait_until
 from cml_mcp.safety import AppContext, register_tool
@@ -292,6 +294,259 @@ def _snapshot_markdown(lab_id: str, path: Path, size: int, results: list[dict]) 
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- SVG render
+#
+# Hand-written SVG only: no drawing dependency. Node boxes are laid out from
+# CML's own canvas coordinates when they are usable, otherwise from a grid.
+# EVERY piece of text that reaches the document goes through escape() first —
+# node labels, interface labels and lab titles are all user-controlled.
+
+_BOX_W = 148.0
+_BOX_H = 54.0
+_PAD_X = 48.0
+_PAD_TOP = 64.0
+_PAD_BOTTOM = 48.0
+_GRID_GAP_X = 70.0
+_GRID_GAP_Y = 90.0
+_MAX_SPAN_W = 1400.0
+_MAX_SPAN_H = 900.0
+_MAX_SCALE = 2.0
+
+# state -> (fill, stroke/badge colour)
+_STATE_STYLES: dict[str, tuple[str, str]] = {
+    "BOOTED": ("#eef6ef", "#15803d"),
+    "STARTED": ("#eef6ef", "#15803d"),
+    "QUEUED": ("#fff7ed", "#b45309"),
+    "DISCONNECTED": ("#fdf0ee", "#b91c1c"),
+    "STOPPED": ("#f4f6f9", "#334155"),
+    "DEFINED_ON_CORE": ("#f4f6f9", "#334155"),
+}
+_UNKNOWN_STATE_STYLE = ("#f8fafc", "#64748b")
+
+
+def _safe_filename_id(lab_id: str) -> str:
+    """Reduce a lab ID to UUID-safe characters before it becomes a file name."""
+    cleaned = "".join(c for c in lab_id if c.isalnum() or c == "-")
+    return cleaned or "lab"
+
+
+def _svg_text(value: Any, limit: int = 26) -> str:
+    """One XML-escaped, length-capped text run for the SVG document."""
+    text = " ".join(str("" if value is None else value).split())
+    if len(text) > limit:
+        text = text[: limit - 1] + "…"
+    return escape(text)
+
+
+def _numeric(value: Any) -> float | None:
+    """CML x/y as a float, rejecting bools and non-numbers."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return float(value)
+
+
+def _topology_layout(nodes: list[dict]) -> tuple[dict[str, tuple[float, float]], float, float, str]:
+    """Node-centre positions, canvas size, and which layout was used.
+
+    Uses CML's own x/y when every node has numeric coordinates and they are not
+    all identical (an all-zero or missing-coordinate topology would collapse to
+    a single point); otherwise falls back to a square-ish grid.
+    """
+    ids = [str(node.get("id", "")) for node in nodes]
+    raw: list[tuple[float, float]] | None = []
+    for node in nodes:
+        x, y = _numeric(node.get("x")), _numeric(node.get("y"))
+        if x is None or y is None:
+            raw = None
+            break
+        raw.append((x, y))  # type: ignore[union-attr]
+
+    if raw:
+        xs = [p[0] for p in raw]
+        ys = [p[1] for p in raw]
+        span_x, span_y = max(xs) - min(xs), max(ys) - min(ys)
+        if span_x > 0 or span_y > 0:
+            scale = min(
+                _MAX_SPAN_W / (span_x or 1.0), _MAX_SPAN_H / (span_y or 1.0), _MAX_SCALE
+            )
+            positions = {
+                node_id: (
+                    _PAD_X + _BOX_W / 2 + (x - min(xs)) * scale,
+                    _PAD_TOP + _BOX_H / 2 + (y - min(ys)) * scale,
+                )
+                for node_id, (x, y) in zip(ids, raw, strict=True)
+            }
+            return (
+                positions,
+                2 * _PAD_X + _BOX_W + span_x * scale,
+                _PAD_TOP + _PAD_BOTTOM + _BOX_H + span_y * scale,
+                "cml",
+            )
+
+    cols = max(1, math.ceil(math.sqrt(len(ids))))
+    rows = max(1, math.ceil(len(ids) / cols))
+    positions = {
+        node_id: (
+            _PAD_X + _BOX_W / 2 + (index % cols) * (_BOX_W + _GRID_GAP_X),
+            _PAD_TOP + _BOX_H / 2 + (index // cols) * (_BOX_H + _GRID_GAP_Y),
+        )
+        for index, node_id in enumerate(ids)
+    }
+    return (
+        positions,
+        2 * _PAD_X + cols * _BOX_W + (cols - 1) * _GRID_GAP_X,
+        _PAD_TOP + _PAD_BOTTOM + rows * _BOX_H + (rows - 1) * _GRID_GAP_Y,
+        "grid",
+    )
+
+
+def _node_ip_labels(addresses: dict) -> dict[str, str]:
+    """node_id -> short 'ip4, ip4' annotation from the layer3_addresses payload."""
+    annotated: dict[str, str] = {}
+    for node_id, entry in (addresses or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        found: list[str] = []
+        for interface in (entry.get("interfaces") or {}).values():
+            if isinstance(interface, dict):
+                found += [str(ip) for ip in (interface.get("ip4") or [])]
+                found += [str(ip) for ip in (interface.get("ip6") or [])]
+        if found:
+            annotated[str(node_id)] = ", ".join(found[:2])
+    return annotated
+
+
+def _render_topology_svg(
+    topology: dict, states: dict, addresses: dict
+) -> tuple[str, dict[str, Any]]:
+    """Build the SVG document for a lab topology; returns (svg, stats)."""
+    lab = topology.get("lab") or {}
+    nodes: list[dict] = [n for n in (topology.get("nodes") or []) if isinstance(n, dict)]
+    links: list[dict] = [ln for ln in (topology.get("links") or []) if isinstance(ln, dict)]
+    node_states: dict = (states or {}).get("nodes") or {}
+    ip_labels = _node_ip_labels(addresses)
+
+    positions, width, height, layout = _topology_layout(nodes)
+    interface_labels: dict[str, Any] = {}
+    for node in nodes:
+        for interface in node.get("interfaces") or []:
+            if isinstance(interface, dict):
+                interface_labels[str(interface.get("id"))] = interface.get("label")
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" '
+        f'width="{width:.0f}" height="{height:.0f}" '
+        'font-family="Helvetica,Arial,sans-serif">',
+        f'<rect x="0" y="0" width="{width:.0f}" height="{height:.0f}" fill="#ffffff"/>',
+        f'<text x="{_PAD_X:.0f}" y="30" font-size="14" font-weight="700" fill="#1f2a37">'
+        f"{_svg_text(lab.get('title') or 'CML lab', 64)}</text>",
+        f'<text x="{_PAD_X:.0f}" y="46" font-size="10" fill="#64748b">'
+        f"{len(nodes)} nodes, {len(links)} links · layout from "
+        f"{'CML canvas coordinates' if layout == 'cml' else 'generated grid'}</text>",
+    ]
+
+    drawn_links = 0
+    for link in links:
+        a = positions.get(str(link.get("node_a")))
+        b = positions.get(str(link.get("node_b")))
+        if a is None or b is None:
+            continue  # link references a node that is not in this topology
+        drawn_links += 1
+        parts.append(
+            f'<line x1="{a[0]:.1f}" y1="{a[1]:.1f}" x2="{b[0]:.1f}" y2="{b[1]:.1f}" '
+            'stroke="#94a3b8" stroke-width="1.6"/>'
+        )
+        length = math.hypot(b[0] - a[0], b[1] - a[1]) or 1.0
+        # Sit the label past the edge of the node box, but never past mid-link.
+        fraction = min(0.45, max(0.28, (_BOX_W / 2 + 12) / length))
+        # ...and nudge it off the link line itself so the two don't collide,
+        # perpendicular to the link; steep links also get an end/start anchor
+        # so the text runs away from the line instead of straddling it.
+        offset = (-(b[1] - a[1]) / length * 7, (b[0] - a[0]) / length * 7)
+        anchor = "middle"
+        if abs(offset[0]) > abs(offset[1]):
+            anchor = "end" if offset[0] < 0 else "start"
+        for interface_id, (near, far) in (
+            (link.get("interface_a"), (a, b)),
+            (link.get("interface_b"), (b, a)),
+        ):
+            label = interface_labels.get(str(interface_id))
+            if not label:
+                continue
+            tx = near[0] + (far[0] - near[0]) * fraction + offset[0]
+            ty = near[1] + (far[1] - near[1]) * fraction + offset[1]
+            parts.append(
+                f'<text x="{tx:.1f}" y="{ty:.1f}" text-anchor="{anchor}" font-size="8.5" '
+                f'fill="#64748b">{_svg_text(label, 18)}</text>'
+            )
+
+    annotated = 0
+    for node in nodes:
+        node_id = str(node.get("id", ""))
+        cx, cy = positions.get(node_id, (_PAD_X + _BOX_W / 2, _PAD_TOP + _BOX_H / 2))
+        state = str(node_states.get(node_id) or "UNKNOWN").upper()
+        fill, stroke = _STATE_STYLES.get(state, _UNKNOWN_STATE_STYLE)
+        x, y = cx - _BOX_W / 2, cy - _BOX_H / 2
+        parts.append(
+            f'<g><title>{_svg_text(node.get("label"), 64)} — {_svg_text(state, 32)}'
+            "</title>"
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{_BOX_W:.0f}" height="{_BOX_H:.0f}" '
+            f'rx="7" fill="{fill}" stroke="{stroke}" stroke-width="1.6"/>'
+            f'<text x="{cx:.1f}" y="{cy - 10:.1f}" text-anchor="middle" font-size="11" '
+            f'font-weight="700" fill="#1f2a37">{_svg_text(node.get("label"), 22)}</text>'
+            f'<text x="{cx:.1f}" y="{cy + 4:.1f}" text-anchor="middle" font-size="9" '
+            f'fill="#64748b">{_svg_text(node.get("node_definition"), 24)}</text>'
+            f'<text x="{cx:.1f}" y="{cy + 17:.1f}" text-anchor="middle" font-size="8.5" '
+            f'font-weight="700" fill="{stroke}">{_svg_text(state, 24)}</text></g>'
+        )
+        if node_id in ip_labels:
+            annotated += 1
+            parts.append(
+                f'<text x="{cx:.1f}" y="{cy + _BOX_H / 2 + 12:.1f}" text-anchor="middle" '
+                f'font-size="8.5" fill="#1d4ed8">{_svg_text(ip_labels[node_id], 40)}</text>'
+            )
+
+    parts.append("</svg>")
+    stats = {
+        "nodes": len(nodes),
+        "links": len(links),
+        "drawn_links": drawn_links,
+        "layout": layout,
+        "addressed": annotated,
+        "title": lab.get("title"),
+    }
+    return "\n".join(parts) + "\n", stats
+
+
+def _render_markdown(
+    lab_id: str, path: Path, size: int, stats: dict[str, Any], notes: list[str]
+) -> str:
+    lines = [
+        f"# Topology SVG — {_cell(stats.get('title') or 'CML lab', 64)} ({lab_id})",
+        "",
+        f"- Written to `{path}` ({size} bytes).",
+        f"- {stats['nodes']} nodes, {stats['links']} links "
+        f"({stats['drawn_links']} drawn between placed nodes).",
+        "- Layout from "
+        + (
+            "CML's own canvas coordinates."
+            if stats["layout"] == "cml"
+            else "a generated grid (nodes had missing or identical coordinates)."
+        ),
+        "- Node fill/badge shows runtime state: green BOOTED/STARTED, amber QUEUED, "
+        "red DISCONNECTED, grey STOPPED/DEFINED_ON_CORE.",
+    ]
+    if stats["addressed"]:
+        lines.append(f"- Layer-3 addresses annotated under {stats['addressed']} node(s).")
+    lines += notes
+    lines += [
+        "",
+        "Open the file in any web browser (it is plain text SVG) or attach it to a "
+        "multimodal model to check the topology against intent.",
+    ]
+    return "\n".join(lines)
+
+
 def register(mcp: MCPServer, ctx: AppContext) -> None:
     settings, client = ctx.settings, ctx.client
 
@@ -529,6 +784,134 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
         try:
             data = await client.request_json("GET", f"/labs/{lab_id}/layer3_addresses")
             return finalize(to_json(data), settings)
+        except Exception as e:
+            return format_error(e)
+
+    @register_tool(
+        mcp,
+        ctx,
+        name="cml_render_topology_svg",
+        title="Render Lab Topology to SVG",
+        read_only=True,
+        idempotent=True,
+    )
+    async def cml_render_topology_svg(
+        lab_id: LabId,
+        output_path: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Where to write the SVG on the machine running this server "
+                    "(e.g. '/tmp/ccna-topology.svg'). Defaults to the system temp "
+                    "directory as 'cml-topology-<lab id>.svg'. An existing file at "
+                    "this path is overwritten."
+                ),
+                min_length=1,
+                max_length=4096,
+            ),
+        ] = None,
+        include_addresses: Annotated[
+            bool,
+            Field(
+                description=(
+                    "true: also fetch DHCP-discovered layer-3 addresses and print them "
+                    "under the nodes that have them (only useful on a started lab). "
+                    "false (default): skip that extra request. Example: true."
+                ),
+            ),
+        ] = False,
+    ) -> str:
+        """Draw a lab's topology as an SVG diagram and save it to a file.
+
+        Read-only on CML; the only side effect is the file written locally. Use
+        it when a picture beats a table: showing a human the wiring, or handing
+        a multimodal model something to compare against the intended design.
+        Node boxes are positioned from CML's own canvas coordinates (falling
+        back to a grid when coordinates are missing or all identical), coloured
+        by runtime state, and joined by one line per link with the interface
+        names at each end. Do NOT use it when you need to read values —
+        cml_get_lab_topology (detail='summary') gives an agent-readable table in
+        the response itself; this tool returns only a path, so an agent that
+        cannot open images gains nothing from it.
+
+        The topology fetch is required; the element-state and (with
+        include_addresses=true) layer-3 fetches are best-effort and run
+        concurrently — if they fail the diagram is still written, with a note.
+
+        Args:
+            lab_id: Lab to draw.
+            output_path: Destination file (defaults to the system temp dir).
+            include_addresses: Annotate nodes with discovered IPv4/IPv6.
+
+        Returns:
+            str: Markdown — output path and byte size, node/link counts, which
+            layout was used, the state colour key, and how many nodes got
+            address annotations. On failure: "Error: ..." (404 -> lab ID
+            doesn't exist; OSError -> output_path is not writable here).
+        """
+        try:
+            requests = [
+                client.request_json(
+                    "GET",
+                    f"/labs/{lab_id}/topology",
+                    params={"exclude_configurations": True},
+                ),
+                client.request_json("GET", f"/labs/{lab_id}/lab_element_state"),
+            ]
+            if include_addresses:
+                requests.append(
+                    client.request_json("GET", f"/labs/{lab_id}/layer3_addresses")
+                )
+            results = await asyncio.gather(*requests, return_exceptions=True)
+
+            topology = results[0]
+            if isinstance(topology, BaseException):
+                raise topology  # no topology, nothing to draw
+            if not isinstance(topology, dict):
+                raise PlatformError(
+                    "The topology endpoint returned an unexpected payload "
+                    "(expected a JSON object with 'nodes' and 'links')."
+                )
+
+            notes: list[str] = []
+            states = results[1]
+            if not isinstance(states, dict):
+                states = {}
+                notes.append(
+                    "- Runtime state was unavailable, so every node is drawn as UNKNOWN "
+                    "(retry with cml_get_lab_element_state to see why)."
+                )
+            addresses: dict = {}
+            if include_addresses:
+                probed = results[2]
+                if isinstance(probed, dict):
+                    addresses = probed
+                else:
+                    notes.append(
+                        "- Layer-3 addresses could not be read, so none are annotated "
+                        "(the lab is probably not started)."
+                    )
+
+            svg, stats = _render_topology_svg(topology, states, addresses)
+            if include_addresses and not stats["addressed"] and not notes:
+                notes.append(
+                    "- No layer-3 addresses were discovered, so no nodes are annotated."
+                )
+            if output_path:
+                path = Path(output_path).expanduser()
+            else:
+                path = (
+                    Path(tempfile.gettempdir())
+                    / f"cml-topology-{_safe_filename_id(lab_id)}.svg"
+                )
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data = svg.encode("utf-8")
+            path.write_bytes(data)
+            return finalize(
+                _render_markdown(lab_id, path, len(data), stats, notes),
+                settings,
+                f"The diagram itself is on disk at {path}; only this summary was shortened.",
+            )
         except Exception as e:
             return format_error(e)
 

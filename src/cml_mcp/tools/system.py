@@ -5,7 +5,8 @@ Visibility into the CML controller itself (as opposed to labs):
 - health also surfaces maintenance mode and unacknowledged system notices
 - resource pools: per-pool CPU/memory/disk/license limits vs current usage
 - node and image definitions (the catalog of node types agents can instantiate)
-- external connectors (bridges to the outside world)
+- external connectors (bridges to the outside world): list, host rescan, update
+- low-level controller diagnostics (launch queue, startup scheduler, and friends)
 - licensing registration status, features, and limits
 - users and groups, including admin-only create/delete writes
 
@@ -17,7 +18,7 @@ present the standard pagination envelope.
 from __future__ import annotations
 
 import asyncio
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import MCPServer
 from pydantic import Field
@@ -44,6 +45,20 @@ GroupId = Annotated[
         description=(
             "Group ID, a UUID string (e.g. '90f84e38-a71c-4d57-8d90-00fa8a197385'). "
             "Discover IDs with cml_list_groups."
+        ),
+        min_length=36,
+        max_length=36,
+    ),
+]
+
+ConnectorId = Annotated[
+    str,
+    Field(
+        description=(
+            "External connector ID, a UUID string (e.g. "
+            "'90f84e38-a71c-4d57-8d90-00fa8a197385'). Discover IDs with "
+            "cml_list_external_connectors — this is the connector's id, not its "
+            "label and not the host device name such as 'bridge1'."
         ),
         min_length=36,
         max_length=36,
@@ -302,6 +317,67 @@ def _groups_markdown(groups: list[dict], envelope: dict) -> str:
             lines.append(f"  - {g['description']}")
     _append_more_hint(lines, envelope)
     return "\n".join(lines)
+
+
+def _launch_queue_markdown(entries: list[dict]) -> str:
+    if not entries:
+        return (
+            "# Node Launch Queue (0)\n\n"
+            "The launch queue is empty: nothing is waiting for compute capacity, "
+            "so a node still in DEFINED_ON_CORE is not queued — look at "
+            "cml_get_system_health and the node's own state instead."
+        )
+    lines = [f"# Node Launch Queue ({len(entries)} waiting)", ""]
+    for entry in entries:
+        lines.append(f"- node {entry.get('node_id', '?')} (lab {entry.get('lab_id', '?')})")
+        details = [f"queued_time: {entry.get('queued_time', '?')}"]
+        if entry.get("priority") is not None:
+            details.append(f"priority: {entry['priority']}")
+        deps = entry.get("dependencies") or []
+        if deps:
+            details.append(f"waiting on {len(deps)} node(s)")
+        req = entry.get("resource_requirements")
+        if isinstance(req, dict):
+            details.append(
+                "needs cpus={}, ram={}".format(req.get("cpus", "?"), req.get("ram", "?"))
+            )
+        lines.append(f"  - {'; '.join(details)}")
+    return "\n".join(lines)
+
+
+def _startup_scheduler_markdown(data: dict) -> str:
+    lines = [
+        "# Startup Scheduler",
+        "",
+        f"- System ready: {_bool_word(data.get('system_ready'))}",
+        f"- Core driver connected: {_bool_word(data.get('core_driver_connected'))}",
+        f"- Node definitions loaded: {_bool_word(data.get('node_definitions_loaded'))}",
+        f"- Licensing loaded: {_bool_word(data.get('licensing_loaded'))}",
+        f"- LLD connected: {_bool_word(data.get('lld_connected'))}",
+        f"- LLD synced: {_bool_word(data.get('lld_synced'))}",
+    ]
+    if not data.get("system_ready"):
+        lines.append("")
+        lines.append(
+            "system_ready is not true: the controller cannot launch nodes yet, so "
+            "starts will sit in DEFINED_ON_CORE regardless of the lab."
+        )
+    return "\n".join(lines)
+
+
+def _diagnostics_markdown(category: str, data: Any) -> str:
+    if category == "node_launch_queue":
+        return _launch_queue_markdown([e for e in (data or []) if isinstance(e, dict)])
+    if category == "startup_scheduler" and isinstance(data, dict):
+        return _startup_scheduler_markdown(data)
+    if isinstance(data, list):
+        header = f"# Diagnostics: {category} ({len(data)} entries)"
+    elif isinstance(data, dict):
+        header = f"# Diagnostics: {category} ({len(data)} keys)"
+    else:
+        header = f"# Diagnostics: {category}"
+    # No stable shape for the remaining categories: show the raw document.
+    return f"{header}\n\n```json\n{to_json(data)}\n```"
 
 
 def register(mcp: MCPServer, ctx: AppContext) -> None:
@@ -597,6 +673,31 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
         Tags indicate the purpose (e.g. 'NAT', 'System Bridge'); 'operational'
         shows the device state on the controller.
 
+        Topology note: an external_connector node has exactly ONE port. When
+        several devices share the same outside segment, put an
+        'unmanaged_switch' node behind the connector and attach the devices to
+        that, rather than trying to add more links to the connector itself.
+
+        OPERATIONAL GOTCHA — the one known case where CML link/interface state
+        lies (live-proven on this controller):
+        Running 'netplan apply' on the CML controller host rebuilds bridge0. The
+        rebuilt bridge keeps its physical uplink but LOSES every lab's tap, so
+        every node in EVERY lab drops off the management network at once — while
+        the CML API still reports each link and interface as STARTED, so the
+        usual fabric check (cml_list_links / interface state) looks perfectly
+        clean. The tell is that the controller itself and non-CML hosts on the
+        same subnet stay reachable while all lab nodes do not.
+        Diagnose on the controller host (shell, not this API):
+        'ip -br link show master bridge0' — a healthy bridge lists the lab taps
+        ('lnk*' interfaces); an orphaned one shows only the uplink (e.g.
+        'ens192') and no 'lnk*' entries.
+        Fix without rebooting: stop and then start each lab's external_connector
+        node (cml_set_node_state action='stop', then action='start'). CML
+        re-attaches the tap and
+        connectivity returns in seconds. Repeat for every lab that has one; live
+        node state survives the bounce. Budget one connector-node bounce per lab
+        immediately after any planned 'netplan apply' on the controller.
+
         Returns:
             str: Markdown listing (label, id, device, state, tags per connector),
             or JSON list of full ExternalConnector objects:
@@ -611,6 +712,192 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
             if response_format is ResponseFormat.JSON:
                 return finalize(to_json(items), settings)
             return finalize(_connectors_markdown(items), settings)
+        except Exception as e:
+            return format_error(e)
+
+    @register_tool(
+        mcp,
+        ctx,
+        name="cml_sync_external_connectors",
+        title="Sync External Connectors",
+        read_only=False,
+        destructive=False,
+        idempotent=True,
+    )
+    async def cml_sync_external_connectors(
+        push_configured_state: Annotated[
+            bool,
+            Field(
+                description="true (default) pushes CML's connector configuration down "
+                "onto the controller host: every bridge is set to snooped and L2 "
+                "bridges are set to protected. false (e.g. false) preserves whatever "
+                "the host already has and just reports it back."
+            ),
+        ] = True,
+        response_format: Annotated[
+            ResponseFormat,
+            Field(description="'markdown' for human-readable output, 'json' for complete data."),
+        ] = ResponseFormat.MARKDOWN,
+    ) -> str:
+        """Rescan the controller host and refresh CML's list of external connectors.
+
+        Write (non-destructive) — only registered when CML_MCP_ENABLE_WRITES=true.
+        CML can only DISCOVER bridge devices on its own host; there is no API to
+        create one. So the workflow is: an administrator creates the Linux bridge
+        on the CML controller (e.g. via netplan), then you call this tool to make
+        CML notice it, then cml_update_external_connector to label and tag it.
+        Use this after a bridge is added, renamed, or removed on the controller,
+        or when cml_list_external_connectors doesn't show a bridge you know
+        exists. Do not use it to create connectivity — it only rescans.
+
+        A newly discovered bridge appears with "interface": null when it has no
+        member port. That is expected for a deliberately isolated lab-only bridge
+        (no uplink means lab traffic cannot leak onto the physical network) and
+        does not stop CML from using it; such a bridge also reports
+        DOWN/NO-CARRIER on the host, which is likewise normal.
+
+        Leave push_configured_state=true unless an administrator has hand-tuned
+        snooping/protection on the host and you want to read that state back
+        instead of overwriting it. Note that the default push marks L2 bridges
+        protected, and protected filters DHCP — see
+        cml_update_external_connector before relying on DHCP over a bridge.
+
+        Returns:
+            str: Markdown listing of the connectors as they are after the rescan
+            (same shape as cml_list_external_connectors), or JSON list of
+            ExternalConnector objects:
+            [{"id": str (UUID), "label": str, "device_name": str,
+              "operational": str, "tags": [str, ...], "allowed": bool,
+              "snooped": bool, "protected": bool}, ...]
+            On failure: "Error: ..." (403 -> the configured account is not an
+            admin; this rescan is admin-only on most controllers).
+        """
+        try:
+            data = await client.request_json(
+                "PUT",
+                "/system/external_connectors",
+                json_body={"push_configured_state": push_configured_state},
+            )
+            items = data if isinstance(data, list) else []
+            if response_format is ResponseFormat.JSON:
+                return finalize(
+                    to_json(items),
+                    settings,
+                    truncation_hint=(
+                        "The rescan itself completed; use response_format='markdown' "
+                        "for a shorter view of the result."
+                    ),
+                )
+            return finalize(
+                _connectors_markdown(items),
+                settings,
+                truncation_hint=(
+                    "The rescan itself completed; re-read the list with "
+                    "cml_list_external_connectors."
+                ),
+            )
+        except Exception as e:
+            return format_error(e)
+
+    @register_tool(
+        mcp,
+        ctx,
+        name="cml_update_external_connector",
+        title="Update External Connector",
+        read_only=False,
+        destructive=False,
+        idempotent=True,
+    )
+    async def cml_update_external_connector(
+        connector_id: ConnectorId,
+        label: Annotated[
+            str | None,
+            Field(
+                description="New unique, human-readable label (e.g. 'ISP1'). This is "
+                "the value a lab's external_connector node references in its "
+                "configuration, so pick something stable.",
+                min_length=1,
+                max_length=128,
+            ),
+        ] = None,
+        tags: Annotated[
+            list[str] | None,
+            Field(
+                description="Replacement list of purpose tags (e.g. ['ISP1']). Replaces "
+                "the existing tags entirely — pass the full list, not just additions."
+            ),
+        ] = None,
+        protected: Annotated[
+            bool | None,
+            Field(
+                description="L2 protection filtering for the segment. true FILTERS DHCP "
+                "and other L2 control traffic; set false (e.g. false) on an isolated "
+                "lab-only bridge that must carry DHCP."
+            ),
+        ] = None,
+        snooped: Annotated[
+            bool | None,
+            Field(
+                description="IP snooping for the segment (e.g. true). Snooping is how "
+                "CML learns node IP addresses for display; leave unset to keep the "
+                "current value."
+            ),
+        ] = None,
+    ) -> str:
+        """Set the label, tags, and L2 protection of an external connector.
+
+        Write (non-destructive) — only registered when CML_MCP_ENABLE_WRITES=true.
+        Use after cml_sync_external_connectors has discovered a new bridge, to
+        give it a meaningful label and tags, and to set whether the segment is
+        protected/snooped. Only the fields you pass are changed; omitted fields
+        keep their current values. This tool cannot create a bridge or change the
+        host device it maps to — bridges are created on the controller host and
+        only discovered by CML.
+
+        CRITICAL — protected=true FILTERS DHCP. 'protected' exists to stop a lab
+        from disrupting the network OUTSIDE it, and the filtering it applies
+        drops DHCP and similar L2 control traffic. On an isolated, lab-only
+        bridge (one with no member port, so nothing can leak anyway) that
+        filtering has nothing to protect and instead silently breaks any
+        DHCP-based transport: clients simply never get an address and the
+        failure looks like a topology problem. Set protected=false for those
+        segments. The default sync (push_configured_state=true) marks L2 bridges
+        protected, so an isolated bridge usually needs this call right after it
+        is discovered.
+
+        Returns:
+            str: JSON of the updated ExternalConnector object:
+            {"id": str (UUID), "label": str, "device_name": str,
+             "operational": str, "tags": [str, ...], "allowed": bool,
+             "snooped": bool, "protected": bool}
+            On failure: "Error: ..." (404 -> connector_id doesn't exist, list
+            them with cml_list_external_connectors; 403 -> the configured
+            account is not an admin; 400/409 -> the label is already used by
+            another connector).
+        """
+        try:
+            body: dict[str, Any] = {}
+            if label is not None:
+                body["label"] = label
+            if tags is not None:
+                body["tags"] = tags
+            if protected is not None:
+                body["protected"] = protected
+            if snooped is not None:
+                body["snooped"] = snooped
+            if not body:
+                return (
+                    "Error: No fields to update. Provide at least one of label, tags, "
+                    "protected, snooped."
+                )
+            data = await client.request_json(
+                "PATCH", f"/system/external_connectors/{connector_id}", json_body=body
+            )
+            return finalize(
+                to_json(data),
+                settings,
+                truncation_hint="Fetch the connector with cml_list_external_connectors instead.",
+            )
         except Exception as e:
             return format_error(e)
 
@@ -1055,5 +1342,97 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
             if response_format is ResponseFormat.JSON:
                 return finalize(to_json({"lab_id": lab_id, "pools": records}), settings)
             return finalize(_resource_usage_markdown(records, lab_id), settings)
+        except Exception as e:
+            return format_error(e)
+
+    @register_tool(
+        mcp,
+        ctx,
+        name="cml_get_diagnostics",
+        title="Get Controller Diagnostics",
+        read_only=True,
+        idempotent=True,
+    )
+    async def cml_get_diagnostics(
+        category: Annotated[
+            Literal[
+                "computes",
+                "labs",
+                "lab_events",
+                "licensing",
+                "node_definitions",
+                "node_launch_queue",
+                "services",
+                "startup_scheduler",
+                "user_list",
+            ],
+            Field(
+                description="Which diagnostic document to fetch (e.g. "
+                "'node_launch_queue'). 'node_launch_queue' = nodes waiting for "
+                "compute capacity; 'startup_scheduler' = controller readiness "
+                "flags; 'computes' = per-compute detail; 'labs' / 'lab_events' = "
+                "per-lab internal state and recent events; 'services' = internal "
+                "service detail; 'licensing' = licensing internals; "
+                "'node_definitions' = definition-loading detail; 'user_list' is "
+                "deprecated — use cml_list_users instead."
+            ),
+        ],
+        response_format: Annotated[
+            ResponseFormat,
+            Field(description="'markdown' for human-readable output, 'json' for complete data."),
+        ] = ResponseFormat.MARKDOWN,
+    ) -> str:
+        """Get a low-level controller diagnostic document for troubleshooting.
+
+        Read-only. This is the escalation step after cml_get_system_health,
+        cml_get_system_stats, and cml_get_resource_usage: it exposes the
+        controller's internal view rather than a summary. Use it when a node or
+        lab misbehaves and the normal reads look clean. Do not use it for
+        routine listings — cml_list_users, cml_list_node_definitions, and
+        cml_list_labs return cleaner, paginated data for the same objects.
+
+        Answering "why is a started node still DEFINED_ON_CORE?": check
+        category='node_launch_queue' first. If the node's ID appears there, the
+        launch is QUEUED behind other launches — either waiting on the
+        'dependencies' listed in its entry, or waiting for capacity, in which
+        case cml_get_resource_usage shows which pool quota (CPU/RAM/disk) is
+        exhausted and cml_get_system_stats shows whether the computes are simply
+        full. If the node's ID is NOT in the queue, it is not waiting: the launch
+        actually failed or was never scheduled — check
+        category='startup_scheduler', where system_ready=false (or
+        core_driver_connected/node_definitions_loaded/licensing_loaded=false)
+        means the controller cannot launch anything yet, and then the node's own
+        console log (cml_get_node_console_log) for a per-node failure.
+
+        Some categories ('labs', 'lab_events', 'computes', 'services') return
+        large documents on a busy controller; the response is capped and the
+        truncation note says so — narrow to a more specific category or use
+        response_format='markdown' rather than re-requesting the same document.
+
+        Returns:
+            str: Markdown summary for 'node_launch_queue' (one line per queued
+            node: node_id, lab_id, queued_time, priority, dependency count,
+            cpus/ram required) and for 'startup_scheduler' (system_ready,
+            core_driver_connected, node_definitions_loaded, licensing_loaded,
+            lld_connected, lld_synced as yes/no/unknown); other categories are
+            returned as the raw JSON document under a heading. With
+            response_format='json', the raw document itself — its shape depends
+            on the category: 'node_launch_queue' and 'node_definitions' are JSON
+            arrays, 'computes', 'labs' and 'lab_events' are objects keyed by
+            UUID, 'startup_scheduler', 'services' and 'licensing' are flat
+            objects.
+            On failure: "Error: ..." (403 -> the diagnostics endpoint is
+            admin-only on most controllers, so a non-admin account cannot read
+            any category — use cml_get_system_health for the non-admin view;
+            404 -> the controller does not implement this category).
+        """
+        try:
+            data = await client.request_json("GET", f"/diagnostics/{category}")
+            hint = (
+                "Pick a narrower category, or response_format='markdown' for a summary."
+            )
+            if response_format is ResponseFormat.JSON:
+                return finalize(to_json(data), settings, truncation_hint=hint)
+            return finalize(_diagnostics_markdown(category, data), settings, truncation_hint=hint)
         except Exception as e:
             return format_error(e)

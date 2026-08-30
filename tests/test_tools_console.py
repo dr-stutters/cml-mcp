@@ -156,6 +156,8 @@ def _patch_console(monkeypatch, testbed, **overrides) -> None:
         monkeypatch.setattr(console_module, "_apply_config", overrides["apply_config"])
     if "parse" in overrides:
         monkeypatch.setattr(console_module, "_parse_output", overrides["parse"])
+    if "learn" in overrides:
+        monkeypatch.setattr(console_module, "_learn_feature", overrides["learn"])
 
 
 # ------------------------------------------------- credential-injection helper
@@ -187,6 +189,7 @@ async def test_run_command_was_renamed_to_run_commands(mcp):
     names = {tool.name for tool in await mcp.list_tools()}
     assert "cml_run_commands" in names
     assert "cml_ping_matrix" in names
+    assert "cml_learn_feature" in names
     assert "cml_run_command" not in names  # old singular name is gone
 
 
@@ -454,6 +457,10 @@ async def test_console_tools_report_missing_pyats_extra(mcp, monkeypatch):
             {"lab_id": LAB_ID, "node_labels": ["R1"], "config_lines": "no ip http"},
         ),
         ("cml_ping_matrix", {"lab_id": LAB_ID}),
+        (
+            "cml_learn_feature",
+            {"lab_id": LAB_ID, "node_labels": ["R1"], "feature": "ospf"},
+        ),
     ):
         text = await call_tool_text(mcp, name, args)
         assert text == console_module.PYATS_MISSING
@@ -772,3 +779,268 @@ async def test_reap_expires_testbed_and_its_sessions_together(monkeypatch):
     assert manager._testbeds == {}
     assert manager._devices == {}
     assert disconnected == [device]  # no orphaned console session left behind
+
+
+# ----------------------------------------------------------- cml_learn_feature
+
+
+class FakeLearned:
+    """Stand-in for a Genie Ops object: only .info matters to the tool."""
+
+    def __init__(self, info) -> None:
+        self.info = info
+
+
+@respx.mock
+async def test_learn_feature_returns_documents_per_node(mcp, monkeypatch):
+    _mock_nodes(("R1", "BOOTED"), ("R2", "BOOTED"))
+    _mock_testbed()
+    learned: list[tuple[str, str]] = []
+
+    def fake_learn(device, feature):
+        learned.append((device.name, feature))
+        return FakeLearned({"vrf": {"default": {"instance": {"1": {"areas": {}}}}}})
+
+    _patch_console(monkeypatch, _fake_testbed("R1", "R2"), learn=fake_learn)
+
+    text = await call_tool_text(
+        mcp,
+        "cml_learn_feature",
+        {"lab_id": LAB_ID, "node_labels": ["R1", "R2"], "feature": "ospf"},
+    )
+    assert '"R1"' in text and '"R2"' in text
+    assert '"areas"' in text  # the learned document is returned verbatim
+    assert sorted(learned) == [("R1", "ospf"), ("R2", "ospf")]
+
+
+@respx.mock
+async def test_learn_feature_connects_once_and_reuses_session(mcp, monkeypatch, sessions):
+    _mock_nodes()
+    _mock_testbed()
+    testbed = _fake_testbed("R1")
+    _patch_console(
+        monkeypatch, testbed, learn=lambda device, feature: FakeLearned({"ok": True})
+    )
+
+    args = {
+        "lab_id": LAB_ID,
+        "node_labels": ["R1"],
+        "feature": "routing",
+        "timeout_seconds": 300,
+    }
+    await call_tool_text(mcp, "cml_learn_feature", args)
+    await call_tool_text(mcp, "cml_learn_feature", args)
+
+    assert testbed.devices["R1"].connects == 1  # cached console reused, as for run_commands
+    assert (LAB_ID, "R1") in sessions._devices
+
+
+@respx.mock
+async def test_learn_feature_notes_unsupported_and_empty(mcp, monkeypatch):
+    _mock_nodes(("R1", "BOOTED"), ("R2", "BOOTED"))
+    _mock_testbed()
+
+    def fake_learn(device, feature):
+        if device.name == "R1":
+            raise LookupError(f"Could not find a feature called '{feature}'")
+        return FakeLearned({})  # feature not configured on this node
+
+    _patch_console(monkeypatch, _fake_testbed("R1", "R2"), learn=fake_learn)
+
+    text = await call_tool_text(
+        mcp,
+        "cml_learn_feature",
+        {"lab_id": LAB_ID, "node_labels": ["R1", "R2"], "feature": "vxlan"},
+    )
+    assert console_module.LEARN_UNSUPPORTED_NOTE in text
+    assert console_module.LEARN_EMPTY_NOTE in text
+    assert "Error:" not in text  # neither case is a failure
+
+
+@respx.mock
+async def test_learn_feature_isolates_per_node_failure(mcp, monkeypatch):
+    _mock_nodes(("R1", "BOOTED"), ("R2", "STOPPED"), ("R3", "BOOTED"))
+    _mock_testbed()
+
+    def fake_learn(device, feature):
+        if device.name == "R3":
+            raise RuntimeError("password=s3cret leaked in a pyATS log line")
+        return FakeLearned({"instance": {"default": {}}})
+
+    _patch_console(monkeypatch, _fake_testbed("R1", "R2", "R3"), learn=fake_learn)
+
+    text = await call_tool_text(
+        mcp,
+        "cml_learn_feature",
+        {"lab_id": LAB_ID, "node_labels": ["R1", "R2", "R3"], "feature": "bgp"},
+    )
+    assert '"instance"' in text  # R1 still produced its document
+    assert "STOPPED" in text  # R2 pre-flight error, inline
+    assert "console operation on node 'R3' failed (RuntimeError)" in text
+    assert "s3cret" not in text  # pyATS exception text (may embed credentials) stays out
+
+
+@respx.mock
+async def test_learn_feature_rejects_unknown_feature(mcp):
+    """'config' is not a Genie ops model (the old server advertised it anyway)."""
+    with pytest.raises(Exception, match="literal_error") as excinfo:
+        await call_tool_text(
+            mcp,
+            "cml_learn_feature",
+            {"lab_id": LAB_ID, "node_labels": ["R1"], "feature": "config"},
+        )
+    assert "'ospf'" in str(excinfo.value)  # the schema lists the valid features
+    assert len(respx.calls) == 0  # rejected before any HTTP call or SSH hop
+
+
+@respx.mock
+async def test_learn_feature_without_console_credentials(make_settings):
+    mcp = build_server(make_settings())  # api_token only
+    text = await call_tool_text(
+        mcp,
+        "cml_learn_feature",
+        {"lab_id": LAB_ID, "node_labels": ["R1"], "feature": "interface"},
+    )
+    assert text == console_module.MISSING_CREDENTIALS
+    assert len(respx.calls) == 0
+
+
+@respx.mock
+async def test_learn_feature_lab_not_found(mcp, monkeypatch):
+    respx.get(f"{BASE_URL}/labs/{LAB_ID}/nodes").mock(return_value=httpx.Response(404))
+    _patch_console(monkeypatch, _fake_testbed("R1"))
+    text = await call_tool_text(
+        mcp,
+        "cml_learn_feature",
+        {"lab_id": LAB_ID, "node_labels": ["R1"], "feature": "ospf"},
+    )
+    assert text.startswith("Error:")
+    assert "404" in text
+
+
+def test_learn_features_are_importable_genie_ops_models():
+    """Every advertised feature must resolve to a real Genie ops model."""
+    pytest.importorskip("genie.ops.utils")
+    from genie.ops.utils import get_ops
+
+    device = SimpleNamespace(os="iosxe", platform=None, model=None, custom={})
+    for feature in console_module.LEARNABLE_FEATURES.__args__:
+        assert get_ops(feature, device) is not None, feature
+
+
+# ------------------------------------------------- device credential overrides
+
+
+DEVICE_CREDS = {
+    "device_username": "labadmin",
+    "device_password": "day0-pass",
+    "enable_password": "day0-enable",
+}
+
+
+def test_apply_device_credentials_patches_devices_only():
+    data = yaml.safe_load(SAMPLE_TESTBED_YAML)
+    console_module.apply_device_credentials(data, "labadmin", "day0-pass", "day0-enable")
+    assert data["devices"]["R1"]["credentials"]["default"] == {
+        "username": "labadmin",
+        "password": "day0-pass",
+    }
+    assert data["devices"]["R1"]["credentials"]["enable"] == {"password": "day0-enable"}
+    # The SSH proxy keeps the CML account; it is patched separately.
+    assert data["devices"]["terminal_server"]["credentials"]["default"]["username"] == "change_me"
+
+
+def test_apply_device_credentials_only_writes_configured_values():
+    data = yaml.safe_load(SAMPLE_TESTBED_YAML)
+    console_module.apply_device_credentials(data, enable_password="day0-enable")
+    credentials = data["devices"]["R1"]["credentials"]
+    assert credentials["default"] == {"username": "cisco", "password": "cisco"}  # untouched
+    assert credentials["enable"] == {"password": "day0-enable"}
+
+
+def test_apply_device_credentials_noop_when_all_unset():
+    data = yaml.safe_load(SAMPLE_TESTBED_YAML)
+    before = yaml.safe_dump(data)
+    console_module.apply_device_credentials(data)
+    assert yaml.safe_dump(data) == before  # CML's generated credentials survive verbatim
+
+
+def test_apply_device_credentials_creates_missing_sections():
+    data = {"devices": {"R1": {"os": "iosxe"}, "terminal_server": {}}}
+    console_module.apply_device_credentials(data, "labadmin", "day0-pass", "day0-enable")
+    assert data["devices"]["R1"]["credentials"] == {
+        "default": {"username": "labadmin", "password": "day0-pass"},
+        "enable": {"password": "day0-enable"},
+    }
+    assert data["devices"]["terminal_server"] == {}
+
+
+@respx.mock
+async def test_build_testbed_applies_device_credentials(make_settings, monkeypatch):
+    mcp = build_server(
+        make_settings(username="netadmin", password="s3cret", **DEVICE_CREDS)
+    )
+    _mock_nodes()
+    _mock_testbed()
+    loaded: dict = {}
+
+    def fake_load(path: str):
+        data = yaml.safe_load(Path(path).read_text())
+        loaded["path"] = path
+        loaded["mode"] = os.stat(path).st_mode & 0o777
+        loaded["device"] = data["devices"]["R1"]["credentials"]
+        loaded["proxy"] = data["devices"]["terminal_server"]["credentials"]["default"]
+        return _fake_testbed("R1")
+
+    _patch_console(
+        monkeypatch, None, load=fake_load, execute=lambda device, command, timeout: "ok"
+    )
+
+    text = await call_tool_text(
+        mcp,
+        "cml_run_commands",
+        {
+            "lab_id": LAB_ID,
+            "node_labels": ["R1"],
+            "commands": ["show version"],
+            "output_format": "raw",
+        },
+    )
+    assert "ok" in text
+    assert loaded["device"]["default"] == {"username": "labadmin", "password": "day0-pass"}
+    assert loaded["device"]["enable"] == {"password": "day0-enable"}
+    assert loaded["proxy"] == {"username": "netadmin", "password": "s3cret"}
+    assert loaded["mode"] == 0o600  # secrets never hit a world-readable file
+    assert not os.path.exists(loaded["path"])  # ...and the file is gone afterwards
+
+
+@respx.mock
+async def test_device_credentials_never_reach_the_agent(make_settings, monkeypatch):
+    """Neither a success nor a console failure may echo the device secrets."""
+    mcp = build_server(
+        make_settings(username="netadmin", password="s3cret", **DEVICE_CREDS)
+    )
+    _mock_nodes(("R1", "BOOTED"), ("R2", "BOOTED"))
+    _mock_testbed()
+
+    def fake_execute(device, command, timeout_seconds):
+        if device.name == "R2":
+            raise RuntimeError("login failed for labadmin/day0-pass (enable day0-enable)")
+        return "R1 ok"
+
+    _patch_console(monkeypatch, _fake_testbed("R1", "R2"), execute=fake_execute)
+
+    text = await call_tool_text(
+        mcp,
+        "cml_run_commands",
+        {
+            "lab_id": LAB_ID,
+            "node_labels": ["R1", "R2"],
+            "commands": ["show version"],
+            "output_format": "raw",
+        },
+    )
+    assert "console operation on node 'R2' failed (RuntimeError)" in text
+    assert "CML_MCP_DEVICE_USERNAME" in text  # the recovery hint names the env vars...
+    for secret in ("labadmin", "day0-pass", "day0-enable", "s3cret"):
+        assert secret not in text  # ...but never their values

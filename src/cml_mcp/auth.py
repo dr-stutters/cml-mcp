@@ -1,16 +1,14 @@
-"""Pluggable authentication strategies for Cisco platform APIs.
+"""Pluggable authentication strategies for the CML API.
 
-The four target platforms use different schemes; pick (or subclass) one in
-``server.create_auth()`` during specialization:
+The concrete CML flow is wired in ``server.create_auth()``; these are the
+reusable strategies it picks from:
 
-- ISE (ERS / OpenAPI)         -> BasicAuth: HTTP Basic on every request.
-- Catalyst Center             -> LoginTokenAuth: basic-auth POST to a login
-                                 endpoint, token in JSON body, sent as X-Auth-Token.
-- Secure Firewall (FMC)       -> LoginTokenAuth subclass: basic-auth POST, token in
-                                 X-auth-access-token RESPONSE HEADER, domain UUID
-                                 captured from the login response (see CLAUDE.md).
-- CML                         -> LoginTokenAuth: JSON-body POST, token is the raw
-                                 response body, sent as Authorization: Bearer.
+- BasicAuth        -> HTTP Basic on every request (no session state).
+- StaticTokenAuth  -> a pre-issued long-lived token from configuration
+                      (CML_MCP_API_TOKEN: a JWT acquired elsewhere).
+- LoginTokenAuth   -> POST to a login endpoint, cache the token, re-login on
+                      401. CML uses it with a JSON credential body whose
+                      response body IS the bearer token.
 
 All strategies are 401-aware: ApiClient calls handle_unauthorized() once per
 request, so expired tokens are transparently re-acquired.
@@ -58,7 +56,7 @@ class NoAuth(AuthStrategy):
 
 
 class BasicAuth(AuthStrategy):
-    """HTTP Basic on every request. Used by ISE ERS and ISE OpenAPI."""
+    """HTTP Basic on every request (stateless; nothing cached)."""
 
     def __init__(self, username: str, password: str) -> None:
         if not username or not password:
@@ -100,20 +98,20 @@ class StaticTokenAuth(AuthStrategy):
 class LoginTokenAuth(AuthStrategy):
     """Session-token auth: POST to a login endpoint, cache the token, re-login on 401.
 
-    Configurable enough to cover Catalyst Center, CML, and (via subclass) FMC:
+    Configurable enough to cover most session-token schemes:
 
-    - login_style:    'basic' sends HTTP Basic on the login request (Catalyst Center,
-                      FMC); 'json' sends {"username": ..., "password": ...} as the
-                      body (CML).
+    - login_style:    'basic' sends HTTP Basic on the login request;
+                      'json' sends {"username": ..., "password": ...} as the
+                      body (this is what CML expects).
     - token_location: 'json' reads token_field from the JSON response body;
-                      'header' reads the token_field response header (FMC);
-                      'body' takes the whole response body as the token (CML).
-    - auth_header/auth_scheme: how the cached token is presented on API requests,
-                      e.g. ('X-Auth-Token', None) for Catalyst Center or
-                      ('Authorization', 'Bearer') for CML.
+                      'header' reads the token_field response header;
+                      'body' takes the whole response body as the token
+                      (CML returns the JWT this way).
+    - auth_header/auth_scheme: how the cached token is presented on API
+                      requests — ('Authorization', 'Bearer') for CML.
 
-    Subclass hooks: override _extract_token() or _on_login_response() for
-    platforms that return extra session state (FMC domain UUIDs, refresh tokens).
+    Subclass hooks: override _extract_token() or _on_login_response() when a
+    platform returns extra session state (scoping IDs, refresh tokens).
     """
 
     def __init__(
@@ -225,4 +223,4 @@ class LoginTokenAuth(AuthStrategy):
         return None
 
     def _on_login_response(self, response: httpx.Response) -> None:
-        """Hook for subclasses to capture extra session state (e.g. FMC DOMAIN_UUID)."""
+        """Hook for subclasses to capture extra session state from the login response."""

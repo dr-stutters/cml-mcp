@@ -4,8 +4,8 @@ All settings come from environment variables with the ``CML_MCP_`` prefix,
 or from a ``.env`` file in the working directory. The specialize script renames
 the prefix per platform (e.g. ``CML_MCP_BASE_URL``).
 
-Secrets (password, api_token) must only ever arrive via environment variables —
-never hardcode them and never log them.
+Secrets (password, api_token, device_password, enable_password) must only ever
+arrive via environment variables — never hardcode them and never log them.
 """
 
 from __future__ import annotations
@@ -24,12 +24,37 @@ class Settings(BaseSettings):
     )
 
     base_url: str = Field(
-        description="Base URL of the platform API, e.g. 'https://fmc.example.com/api'. Required."
+        description="CML API base URL including the /api/v0 prefix, e.g. "
+        "'https://cml.example.com/api/v0'. Required."
     )
     username: str = Field(default="", description="Username for basic or login-token auth.")
     password: str = Field(default="", description="Password for basic or login-token auth.")
     api_token: str = Field(
         default="", description="Static API token, for platforms that issue long-lived tokens."
+    )
+    device_username: str = Field(
+        default="",
+        description=(
+            "Optional. Console login username for the lab's DEVICES (not the CML account). "
+            "Set it when a lab's day-0 configuration replaces the default local user, "
+            "otherwise console logins hang at the prompt. Empty means 'use whatever CML "
+            "generated in the pyATS testbed'."
+        ),
+    )
+    device_password: str = Field(
+        default="",
+        description=(
+            "Optional. Console login password for the lab's DEVICES, paired with "
+            "device_username. Empty means 'use whatever CML generated in the pyATS testbed'."
+        ),
+    )
+    enable_password: str = Field(
+        default="",
+        description=(
+            "Optional. Enable secret for the lab's DEVICES, used when a node drops into "
+            "user EXEC and Unicon has to escalate to privileged EXEC. Empty means 'use "
+            "whatever CML generated in the pyATS testbed'."
+        ),
     )
     verify_tls: bool = Field(
         default=True,

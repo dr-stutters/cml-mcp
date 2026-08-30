@@ -28,6 +28,59 @@ from cml_mcp.safety import AppContext, register_tool
 _UUID_FIELD = {"min_length": 1, "max_length": 100}
 
 
+class AmbiguousInterfaceLabelError(PlatformError, ValueError):
+    """An abbreviated interface label matched more than one physical interface.
+
+    A distinct type so callers can tell "abbreviation is ambiguous" (never
+    guess — name the candidates) apart from "nothing matched" (match_interface
+    returns None and the caller decides what to do).
+    """
+
+
+def _split_iface_label(label: str) -> tuple[str, str]:
+    """'GigabitEthernet0/1' -> ('gigabitethernet', '0/1'); 'ens2' -> ('ens', '2')."""
+    i = 0
+    while i < len(label) and not label[i].isdigit():
+        i += 1
+    return label[:i].strip().casefold(), "".join(label[i:].split())
+
+
+def match_interface(
+    requested: str, ifaces: list[dict[str, Any]], node_ref: str
+) -> dict[str, Any] | None:
+    """Match an interface label, allowing IOS-style abbreviations ('Gi0/1').
+
+    Pure helper (no I/O). Only PHYSICAL interfaces are considered — loopbacks
+    can't carry a link. An exact casefolded label match wins outright;
+    otherwise the label is split into an alpha prefix plus a numeric tail
+    ("Gi0/1" -> ("gi", "0/1")) and the prefix is matched as a prefix of the
+    candidate's, with the tails compared as strings (so '0/1' != '0/01').
+
+    Returns the matching interface dict, or None when nothing matches (the
+    caller decides whether that's an error). Raises
+    AmbiguousInterfaceLabelError when the abbreviation matches several
+    interfaces — it never guesses.
+    """
+    phys = [i for i in ifaces if i.get("type", "physical") == "physical"]
+    req_cf = requested.strip().casefold()
+    exact = [i for i in phys if str(i.get("label", "")).casefold() == req_cf]
+    if exact:
+        return exact[0]
+    req_prefix, req_tail = _split_iface_label(requested)
+    candidates = []
+    for iface in phys:
+        prefix, tail = _split_iface_label(str(iface.get("label", "")))
+        if req_prefix and prefix.startswith(req_prefix) and tail == req_tail:
+            candidates.append(iface)
+    if len(candidates) > 1:
+        names = ", ".join(str(i.get("label")) for i in candidates)
+        raise AmbiguousInterfaceLabelError(
+            f"interface label '{requested}' on node '{node_ref}' is ambiguous: "
+            f"it matches {names}. Pass the full label, or the interface UUID."
+        )
+    return candidates[0] if candidates else None
+
+
 def _links_markdown(links: list[dict[str, Any]], envelope: dict[str, Any]) -> str:
     lines = [f"# Links ({envelope['count']} shown, total {envelope['total']})", ""]
     for link in links:
@@ -119,6 +172,35 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
         raise PlatformError(
             f"Node '{node_ref}' has no free physical interface to link. "
             "Create one with cml_create_interface (the node must be stopped), then retry."
+        )
+
+    async def _resolve_interface_label(
+        lab_id: str, node_id: str, node_ref: str, label: str
+    ) -> str:
+        """Resolve an interface label (possibly abbreviated) on a node to its UUID.
+
+        Raises PlatformError listing the node's physical labels when nothing
+        matches, or AmbiguousInterfaceLabelError naming the candidates.
+        """
+        data = await client.request_json(
+            "GET", f"/labs/{lab_id}/nodes/{node_id}/interfaces", params={"data": "true"}
+        )
+        interfaces = data if isinstance(data, list) else []
+        match = match_interface(label, interfaces, node_ref)
+        if match is not None:
+            return str(match.get("id"))
+        physical = [
+            str(iface.get("label"))
+            for iface in interfaces
+            if iface.get("type", "physical") == "physical"
+        ]
+        available = ", ".join(physical) if physical else "(none)"
+        raise PlatformError(
+            f"Node '{node_ref}' has no physical interface matching label '{label}'. "
+            f"Physical interfaces on this node: {available}. Abbreviations like "
+            "'Gi0/1' are accepted; if the label you expected is missing entirely, "
+            "this node definition may not produce that label; check "
+            "cml_get_node_definition."
         )
 
     # ------------------------------------------------------------------ reads
@@ -301,6 +383,11 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
         Read-only. Use this to find the two free interface IDs needed by
         cml_create_link (pick interfaces with is_connected=false). CML returns
         the full array; pagination is applied client-side.
+
+        CML fabric rule: an interface added to an ALREADY-RUNNING node comes up
+        STOPPED even though its link shows STARTED — no traffic passes and the
+        device sees the port down/down. If state is STOPPED here, start it with
+        cml_set_interface_state and re-check before diagnosing device config.
 
         Returns:
             str: Markdown listing (label, ID, node, state, connected), or JSON:
@@ -513,8 +600,8 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
             str | None,
             Field(
                 description="Source interface ID (UUID) — must be unconnected "
-                "(e.g. '7b1c9d2e-3f4a-4b5c-8d6e-9f0a1b2c3d4e'). Provide exactly one of "
-                "src_int or src_node.",
+                "(e.g. '7b1c9d2e-3f4a-4b5c-8d6e-9f0a1b2c3d4e'). Mutually exclusive with "
+                "src_node/src_int_label: give exactly one of src_int or src_node.",
                 **_UUID_FIELD,
             ),
         ] = None,
@@ -522,26 +609,50 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
             str | None,
             Field(
                 description="Destination interface ID (UUID) — must be unconnected and on "
-                "a different node (e.g. '2e4f6a8b-1c3d-4e5f-9a7b-8c6d4e2f0a1b'). Provide "
-                "exactly one of dst_int or dst_node.",
+                "a different node (e.g. '2e4f6a8b-1c3d-4e5f-9a7b-8c6d4e2f0a1b'). Mutually "
+                "exclusive with dst_node/dst_int_label: give exactly one of dst_int or "
+                "dst_node.",
                 **_UUID_FIELD,
             ),
         ] = None,
         src_node: Annotated[
             str | None,
             Field(
-                description="Source node label or UUID (e.g. 'r1'); the first free physical "
-                "interface on that node is used. Provide exactly one of src_int or src_node.",
+                description="Source node label or UUID (e.g. 'R1'). Alone, the first free "
+                "physical interface on that node is used; with src_int_label, that named "
+                "interface is used. Provide exactly one of src_int or src_node.",
                 **_UUID_FIELD,
             ),
         ] = None,
         dst_node: Annotated[
             str | None,
             Field(
-                description="Destination node label or UUID (e.g. 'r2'); the first free "
-                "physical interface on that node is used. Provide exactly one of dst_int "
-                "or dst_node.",
+                description="Destination node label or UUID (e.g. 'R2'). Alone, the first "
+                "free physical interface on that node is used; with dst_int_label, that "
+                "named interface is used. Provide exactly one of dst_int or dst_node.",
                 **_UUID_FIELD,
+            ),
+        ] = None,
+        src_int_label: Annotated[
+            str | None,
+            Field(
+                description="Pin the source side to a named interface on src_node, e.g. "
+                "'GigabitEthernet0/1', 'Gi0/1' or 'ens2'. IOS-style abbreviations are "
+                "accepted (case-insensitive prefix + exact numeric tail). REQUIRES "
+                "src_node; cannot be combined with src_int.",
+                min_length=1,
+                max_length=100,
+            ),
+        ] = None,
+        dst_int_label: Annotated[
+            str | None,
+            Field(
+                description="Pin the destination side to a named interface on dst_node, "
+                "e.g. 'GigabitEthernet0/2' or 'gig0/2'. IOS-style abbreviations are "
+                "accepted (case-insensitive prefix + exact numeric tail). REQUIRES "
+                "dst_node; cannot be combined with dst_int.",
+                min_length=1,
+                max_length=100,
             ),
         ] = None,
     ) -> str:
@@ -549,9 +660,18 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
 
         Each side takes EITHER an explicit interface ID (src_int/dst_int) OR a
         node (src_node/dst_node, label or UUID) — mixing styles across sides is
-        fine. When a node is given, its first unconnected PHYSICAL interface is
-        picked automatically (loopbacks cannot be linked); if the node has no
-        free interface, the error points at cml_create_interface.
+        fine. When a node is given alone, its first unconnected PHYSICAL
+        interface is picked automatically (loopbacks cannot be linked); if the
+        node has no free interface, the error points at cml_create_interface.
+
+        To pin a specific port instead, pass the interface label ALONGSIDE its
+        node — e.g. src_node='R1', src_int_label='Gi0/1'. Labels are matched
+        case-insensitively, exact match first, then IOS-style abbreviation
+        (alpha prefix + exact numeric tail), so 'Gi0/1', 'gig0/1' and
+        'GigabitEthernet0/1' all resolve; an ambiguous abbreviation is refused
+        with the candidate labels rather than guessed. A label needs its node,
+        so src_int_label without src_node (or with src_int) is rejected before
+        any API call.
 
         WRITE operation — only registered when writes are enabled. Find free
         interfaces (is_connected=false) with cml_list_interfaces. The POST is
@@ -560,36 +680,67 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
 
         Returns:
             str: JSON {"id": "<new link UUID>"}, or "Error: ..."
-            (pre-flight -> both or neither of int/node given for a side;
+            (pre-flight -> both or neither of int/node given for a side, or a
+            label passed without its node / together with an interface ID;
+            no match -> the node's physical labels are listed;
+            ambiguous -> the matching labels are named;
             400/422 -> an interface is already connected or IDs are invalid;
             404 -> the lab doesn't exist).
         """
         try:
-            if (src_int is None) == (src_node is None):
-                return (
-                    "Error: provide exactly one of src_int or src_node for the "
-                    "source side of the link."
-                )
-            if (dst_int is None) == (dst_node is None):
-                return (
-                    "Error: provide exactly one of dst_int or dst_node for the "
-                    "destination side of the link."
-                )
+            for side, int_id, node_ref, label in (
+                ("src", src_int, src_node, src_int_label),
+                ("dst", dst_int, dst_node, dst_int_label),
+            ):
+                if int_id is not None and (node_ref is not None or label is not None):
+                    return (
+                        f"Error: {side}_int is an interface UUID and is mutually "
+                        f"exclusive with {side}_node/{side}_int_label — pass either "
+                        f"{side}_int alone, or {side}_node (optionally with "
+                        f"{side}_int_label)."
+                    )
+                if label is not None and node_ref is None:
+                    return (
+                        f"Error: {side}_int_label ('{label}') is only meaningful on a "
+                        f"node — also pass {side}_node (e.g. {side}_node='R1', "
+                        f"{side}_int_label='{label}'), or use {side}_int with the "
+                        "interface UUID."
+                    )
+                if int_id is None and node_ref is None:
+                    return (
+                        f"Error: provide exactly one of {side}_int or {side}_node for "
+                        f"the {'source' if side == 'src' else 'destination'} side of "
+                        "the link."
+                    )
             if src_node is not None or dst_node is not None:
                 nodes_data = await client.request_json(
                     "GET", f"/labs/{lab_id}/nodes", params={"data": "true"}
                 )
                 nodes = nodes_data if isinstance(nodes_data, list) else []
                 used: set[str] = set()
+                if src_int is not None:
+                    used.add(src_int)
                 if src_node is not None:
-                    src_int = await _pick_free_interface(
-                        lab_id, _match_node_id(nodes, src_node), src_node, used
-                    )
+                    src_node_id = _match_node_id(nodes, src_node)
+                    if src_int_label is not None:
+                        src_int = await _resolve_interface_label(
+                            lab_id, src_node_id, src_node, src_int_label
+                        )
+                    else:
+                        src_int = await _pick_free_interface(
+                            lab_id, src_node_id, src_node, used
+                        )
                     used.add(src_int)
                 if dst_node is not None:
-                    dst_int = await _pick_free_interface(
-                        lab_id, _match_node_id(nodes, dst_node), dst_node, used
-                    )
+                    dst_node_id = _match_node_id(nodes, dst_node)
+                    if dst_int_label is not None:
+                        dst_int = await _resolve_interface_label(
+                            lab_id, dst_node_id, dst_node, dst_int_label
+                        )
+                    else:
+                        dst_int = await _pick_free_interface(
+                            lab_id, dst_node_id, dst_node, used
+                        )
             data = await client.request_json(
                 "POST",
                 f"/labs/{lab_id}/links",
@@ -1044,6 +1195,11 @@ def register(mcp: MCPServer, ctx: AppContext) -> None:
 
         WRITE operation — only registered when writes are enabled. Find
         interface IDs with cml_list_interfaces or cml_get_node_interfaces.
+
+        CML fabric rule: an interface added to an ALREADY-RUNNING node comes up
+        STOPPED even though its link shows STARTED — no traffic passes and the
+        device sees the port down/down. Start it here and re-check the
+        interface state before diagnosing device config.
 
         Returns:
             str: Confirmation message, or "Error: ..." (400 -> lab or

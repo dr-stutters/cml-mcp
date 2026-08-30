@@ -453,6 +453,158 @@ async def test_update_node_no_fields_is_error_without_request(make_settings):
     assert "at least one" in text
 
 
+# ------------------------------------------- polymorphic day-0 configuration
+
+CLOUD_INIT_FILES = [
+    {"name": "user-data", "content": "#cloud-config\nhostname: srv-1\n"},
+    {"name": "meta-data", "content": "instance-id: srv-1\n"},
+]
+
+
+@respx.mock
+async def test_add_node_config_files_sent_verbatim_as_configuration(make_settings):
+    route = respx.post(f"{BASE_URL}/labs/{LAB_ID}/nodes").mock(
+        return_value=httpx.Response(200, json={"id": NODE_ID})
+    )
+    mcp = build_server(make_settings(enable_writes=True))
+    text = await call_tool_text(
+        mcp,
+        "cml_add_node",
+        {
+            "lab_id": LAB_ID,
+            "label": "srv-1",
+            "node_definition": "ubuntu",
+            "config_files": CLOUD_INIT_FILES,
+        },
+    )
+    assert json.loads(text)["id"] == NODE_ID
+    body = json.loads(route.calls[0].request.content)
+    # The multi-file list goes into the same polymorphic 'configuration' field.
+    assert body["configuration"] == CLOUD_INIT_FILES
+
+
+@respx.mock
+async def test_add_node_rejects_configuration_and_config_files_together(make_settings):
+    route = respx.post(f"{BASE_URL}/labs/{LAB_ID}/nodes").mock(
+        return_value=httpx.Response(200, json={"id": NODE_ID})
+    )
+    mcp = build_server(make_settings(enable_writes=True))
+    text = await call_tool_text(
+        mcp,
+        "cml_add_node",
+        {
+            "lab_id": LAB_ID,
+            "label": "srv-1",
+            "node_definition": "ubuntu",
+            "configuration": "hostname srv-1",
+            "config_files": CLOUD_INIT_FILES,
+        },
+    )
+    assert text.startswith("Error:")
+    assert "not both" in text
+    assert not route.called  # rejected pre-flight, nothing sent to CML
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "config_files",
+    [
+        [],
+        [{"name": "user-data"}],
+        [{"name": "", "content": "x"}],
+        [{"name": "user-data", "content": "x", "extra": "y"}],
+    ],
+    ids=["empty", "no-content", "empty-name", "unknown-key"],
+)
+async def test_add_node_rejects_malformed_config_files(make_settings, config_files):
+    route = respx.post(f"{BASE_URL}/labs/{LAB_ID}/nodes").mock(
+        return_value=httpx.Response(200, json={"id": NODE_ID})
+    )
+    mcp = build_server(make_settings(enable_writes=True))
+    text = await call_tool_text(
+        mcp,
+        "cml_add_node",
+        {
+            "lab_id": LAB_ID,
+            "label": "srv-1",
+            "node_definition": "ubuntu",
+            "config_files": config_files,
+        },
+    )
+    assert text.startswith("Error:")
+    assert "config_files" in text
+    assert not route.called
+
+
+@respx.mock
+async def test_add_node_config_files_reports_api_error(make_settings):
+    respx.post(f"{BASE_URL}/labs/{LAB_ID}/nodes").mock(
+        return_value=httpx.Response(404, json={"description": "lab not found"})
+    )
+    mcp = build_server(make_settings(enable_writes=True))
+    text = await call_tool_text(
+        mcp,
+        "cml_add_node",
+        {
+            "lab_id": LAB_ID,
+            "label": "srv-1",
+            "node_definition": "ubuntu",
+            "config_files": CLOUD_INIT_FILES,
+        },
+    )
+    assert text.startswith("Error:")
+
+
+@respx.mock
+async def test_update_node_config_files_replaces_file_list(make_settings):
+    route = respx.patch(f"{BASE_URL}/labs/{LAB_ID}/nodes/{NODE_ID}").mock(
+        return_value=httpx.Response(200, json=NODE_ID)
+    )
+    mcp = build_server(make_settings(enable_writes=True))
+    text = await call_tool_text(
+        mcp,
+        "cml_update_node",
+        {"lab_id": LAB_ID, "node_id": NODE_ID, "config_files": CLOUD_INIT_FILES},
+    )
+    assert NODE_ID in text and "updated" in text
+    assert json.loads(route.calls[0].request.content) == {"configuration": CLOUD_INIT_FILES}
+
+
+@respx.mock
+async def test_update_node_rejects_configuration_and_config_files_together(make_settings):
+    route = respx.patch(f"{BASE_URL}/labs/{LAB_ID}/nodes/{NODE_ID}").mock(
+        return_value=httpx.Response(200, json=NODE_ID)
+    )
+    mcp = build_server(make_settings(enable_writes=True))
+    text = await call_tool_text(
+        mcp,
+        "cml_update_node",
+        {
+            "lab_id": LAB_ID,
+            "node_id": NODE_ID,
+            "configuration": "hostname rtr-1",
+            "config_files": CLOUD_INIT_FILES,
+        },
+    )
+    assert text.startswith("Error:")
+    assert "not both" in text
+    assert not route.called
+
+
+@respx.mock
+async def test_update_node_config_files_reports_api_error(make_settings):
+    respx.patch(f"{BASE_URL}/labs/{LAB_ID}/nodes/{NODE_ID}").mock(
+        return_value=httpx.Response(400, json={"description": "node is running"})
+    )
+    mcp = build_server(make_settings(enable_writes=True))
+    text = await call_tool_text(
+        mcp,
+        "cml_update_node",
+        {"lab_id": LAB_ID, "node_id": NODE_ID, "config_files": CLOUD_INIT_FILES},
+    )
+    assert text.startswith("Error:")
+
+
 @respx.mock
 async def test_set_node_state_start_waits_for_convergence(make_settings, instant_sleep):
     start = respx.put(f"{BASE_URL}/labs/{LAB_ID}/nodes/{NODE_ID}/state/start").mock(
